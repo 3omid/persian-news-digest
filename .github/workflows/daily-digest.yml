@@ -1,0 +1,111 @@
+name: Persian News Digest
+
+on:
+  schedule:
+    # هر ساعت اجرا می‌شه؛ اگه خبر جدیدی نباشه، main.py خودش گزارش نمی‌سازه
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "فقط یک دسته خاص بساز (خالی = همه دسته‌ها)"
+        required: false
+        type: choice
+        options:
+          - "(همه)"
+          - "اقتصادی"
+          - "سیاسی داخلی"
+          - "سیاسی خارجی"
+          - "ورزشی"
+          - "جنگ ایران"
+        default: "(همه)"
+      force:
+        description: "حتی بدون خبر جدید هم گزارش بساز"
+        required: false
+        type: boolean
+        default: true
+
+# این دو خط اجازه می‌ده workflow بتونه رو GitHub Pages پابلیش کنه
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-send:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore seen_news.db (cache)
+        uses: actions/cache@v4
+        with:
+          path: seen_news.db
+          key: seen-news-db-${{ github.run_id }}
+          restore-keys: |
+            seen-news-db-
+
+      - name: Run digest (scheduled)
+        if: github.event_name == 'schedule'
+        env:
+          MODEL_PROVIDER: gemini
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GOLD_API_KEY: ${{ secrets.GOLD_API_KEY }}
+        run: python main.py
+
+      - name: Run digest (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          MODEL_PROVIDER: gemini
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GOLD_API_KEY: ${{ secrets.GOLD_API_KEY }}
+        run: |
+          ARGS=""
+          if [ "${{ inputs.category }}" != "(همه)" ] && [ -n "${{ inputs.category }}" ]; then
+            ARGS="$ARGS --category \"${{ inputs.category }}\""
+          fi
+          if [ "${{ inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          eval python main.py $ARGS
+
+      - name: Upload report as artifact (دانلود دستی از تب Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-digest-${{ github.run_id }}
+          path: output/
+
+      - name: Prepare GitHub Pages files
+        run: |
+          mkdir -p pages_output
+          cp output/latest.html pages_output/index.html
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages_output
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
