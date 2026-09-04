@@ -301,15 +301,30 @@ def _gold_coin_section(gold_coin_prices):
     """
 
 
+def _crypto_cell(c):
+    """یک خونه‌ی فشرده برای گرید ۲ستونه کریپتو - چون ردیف تمام‌عرض معمولی (_info_row)
+    باعث می‌شد این بخش خیلی طولانی بشه و اسکرول زیادی لازم داشته باشه."""
+    chg = c["change_24h_pct"] or 0
+    price = c["price_usd"]
+    price_str = f"${price:,.4f}" if price < 1 else f"${price:,.2f}"
+    up = chg >= 0
+    cls = "up" if up else "down"
+    arrow = "▲" if up else "▼"
+    return f"""
+    <div class="crypto-cell">
+      <div class="crypto-cell-name"><span class="crypto-cell-icon">₿</span>{c['name']} <span class="row-code">{c['symbol']}</span></div>
+      <div class="crypto-cell-bottom">
+        <span class="crypto-cell-price">{price_str}</span>
+        <span class="crypto-chg {cls}">{arrow} {to_persian_digits(f"{abs(chg):.2f}")}٪</span>
+      </div>
+    </div>
+    """
+
+
 def _crypto_section(crypto_market, crypto_text):
     if not crypto_market:
         return ""
-    rows = ""
-    for c in crypto_market:
-        chg = c["change_24h_pct"] or 0
-        price = c["price_usd"]
-        price_str = f"${price:,.4f}" if price < 1 else f"${price:,.2f}"
-        rows += _info_row("₿", c["name"], c["symbol"], price_str, change_pct=chg)
+    cells = "".join(_crypto_cell(c) for c in crypto_market)
 
     labels = [c["symbol"] for c in crypto_market]
     values = [c["change_24h_pct"] or 0 for c in crypto_market]
@@ -319,7 +334,7 @@ def _crypto_section(crypto_market, crypto_text):
     <section class="card" style="border-top-color:#c48a2e;">
       <h2 style="color:#c48a2e;">₿ کریپتوکارنسی</h2>
       <div dir="ltr"><img class="chart-img" src="data:image/png;base64,{chart_b64}" alt="crypto"/></div>
-      {rows}
+      <div class="crypto-grid">{cells}</div>
       {f'<div class="card-note">{_md(crypto_text)}</div>' if crypto_text else ''}
       <p class="card-note">⚠️ این گزارش صرفا داده و روند بازار است، توصیه مالی/خرید/فروش نیست.</p>
     </section>
@@ -542,6 +557,20 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .row-change.down {{ color: var(--down); }}
 
   .chart-img {{ width: 100%; border-radius: 10px; margin-bottom: 8px; }}
+
+  /* گرید ۲ستونه کریپتو - قبلا یه ستون بلند بود که خیلی اسکرول لازم داشت */
+  .crypto-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 10px; }}
+  .crypto-cell {{ border: 1px solid var(--border); border-radius: 10px; padding: 8px 9px; min-width: 0; }}
+  .crypto-cell-name {{
+    display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }}
+  .crypto-cell-icon {{ flex-shrink: 0; font-size: 12px; }}
+  .crypto-cell-bottom {{ display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-top: 5px; }}
+  .crypto-cell-price {{ font-weight: 700; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+  .crypto-chg {{ font-size: 10.5px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }}
+  .crypto-chg.up {{ color: var(--up); }}
+  .crypto-chg.down {{ color: var(--down); }}
 
   /* پنجره نمودار - CSS خالص، بدون جاوااسکریپت */
   .overlay {{ display: none; position: fixed; inset: 0; background: rgba(15,20,30,.75); z-index: 50; align-items: center; justify-content: center; padding: 14px; }}
