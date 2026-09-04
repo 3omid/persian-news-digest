@@ -6,6 +6,7 @@
 """
 
 import base64
+import html as html_lib
 import io
 import os
 import re
@@ -32,6 +33,79 @@ CATEGORY_STYLE = {
 
 def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9]", "", text)
+
+
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_ORDERED_RE = re.compile(r"^(\d+)[.\)]\s+(.*)$")
+_BULLET_RE = re.compile(r"^\s*[*\-•]\s+(.*)$")
+_HR_RE = re.compile(r"^[-_*]{3,}$")
+
+
+def _md(text: str) -> str:
+    """
+    تبدیل سبک متن مارک‌داونی که مدل‌های زبانی (Gemini/Claude) تولید می‌کنن -
+    شامل **بولد**، لیست شماره‌دار «1. ...» و لیست نقطه‌ای «* ...» - به HTML واقعی.
+    بدون این تابع، این نشانه‌ها و شکستن خط‌ها موقع رندر تو مرورگر گم می‌شن و
+    کل متن به شکل یه پاراگراف قاطی‌شده دیده می‌شه (باگی که باعث این تابع شد).
+    ورودی قبل از هر پردازشی escape می‌شه تا HTML دلخواه از مدل تزریق نشه.
+    """
+    if not text:
+        return ""
+    text = html_lib.escape(text.strip())
+
+    def bold(s):
+        return _BOLD_RE.sub(r"<strong>\1</strong>", s)
+
+    blocks = []
+    list_tag = None
+    list_items = []
+    para_lines = []
+
+    def flush_para():
+        if para_lines:
+            blocks.append("<p>" + " ".join(para_lines) + "</p>")
+            para_lines.clear()
+
+    def flush_list():
+        nonlocal list_tag
+        if list_tag:
+            items_html = "".join(f"<li>{it}</li>" for it in list_items)
+            blocks.append(f'<{list_tag} class="md-list">{items_html}</{list_tag}>')
+            list_items.clear()
+            list_tag = None
+
+    for raw_line in text.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            flush_para()
+            flush_list()
+            continue
+        if _HR_RE.match(line):
+            # خط جداکننده مارک‌داونی («---») - محتوایی نداره، فقط مرز بین بخش‌هاست
+            flush_para()
+            flush_list()
+            blocks.append('<hr class="md-hr">')
+            continue
+        m_ol = _ORDERED_RE.match(line)
+        m_ul = None if m_ol else _BULLET_RE.match(line)
+        if m_ol:
+            flush_para()
+            if list_tag != "ol":
+                flush_list()
+                list_tag = "ol"
+            list_items.append(bold(m_ol.group(2)))
+        elif m_ul:
+            flush_para()
+            if list_tag != "ul":
+                flush_list()
+                list_tag = "ul"
+            list_items.append(bold(m_ul.group(1)))
+        else:
+            flush_list()
+            para_lines.append(bold(line))
+    flush_para()
+    flush_list()
+    return "".join(blocks)
 
 
 def _fig_to_base64(fig):
@@ -65,14 +139,35 @@ def _line_chart(series, title):
 
 
 def _bar_chart(labels, values, title):
-    fig, ax = plt.subplots(figsize=(6.6, 3.2))
+    # عرض بیشتر و چرخش برچسب‌ها تا اسم کوین‌ها روی هم نیفتن (باگ قبلی: همه اسم‌ها چسبیده به هم).
+    fig, ax = plt.subplots(figsize=(7.4, 4.3))
     colors = ["#1e8449" if v >= 0 else "#c0392b" for v in values]
-    ax.bar(labels, values, color=colors)
+    bars = ax.bar(range(len(labels)), values, color=colors)
     ax.set_title(title, fontsize=12)
-    ax.axhline(0, color="#333", linewidth=0.8)
+    ax.axhline(0, color="#333", linewidth=0.9)
     ax.grid(alpha=0.25, axis="y")
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
+
+    # کمی فضای خالی بالای صفر نگه می‌داریم حتی وقتی همه مقادیر منفی‌ان،
+    # وگرنه محور انگار از صفر «قطع» شده و نمودار برعکس به‌نظر می‌رسه.
+    vmin, vmax = min(values), max(values)
+    span = max(vmax - vmin, 1.0)
+    pad = span * 0.22
+    ax.set_ylim(min(vmin, 0) - pad, max(vmax, 0) + pad)
+
+    # درصد دقیق روی/زیر هر ستون - قبلا فقط عنوان کلی «24h Change» بود و
+    # هیچ عددی روی خود ستون‌ها دیده نمی‌شد.
+    label_gap = span * 0.045
+    for bar, v in zip(bars, values):
+        y = bar.get_height() + (label_gap if v >= 0 else -label_gap)
+        va = "bottom" if v >= 0 else "top"
+        ax.text(bar.get_x() + bar.get_width() / 2, y, f"{v:+.1f}%",
+                 ha="center", va=va, fontsize=7.5, fontweight="bold", color="#333")
+
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=9)
+    ax.tick_params(axis="y", labelsize=8)
     plt.tight_layout()
     return _fig_to_base64(fig)
 
@@ -225,7 +320,7 @@ def _crypto_section(crypto_market, crypto_text):
       <h2 style="color:#c48a2e;">₿ کریپتوکارنسی</h2>
       <div dir="ltr"><img class="chart-img" src="data:image/png;base64,{chart_b64}" alt="crypto"/></div>
       {rows}
-      {f'<p class="card-note">{crypto_text}</p>' if crypto_text else ''}
+      {f'<div class="card-note">{_md(crypto_text)}</div>' if crypto_text else ''}
       <p class="card-note">⚠️ این گزارش صرفا داده و روند بازار است، توصیه مالی/خرید/فروش نیست.</p>
     </section>
     """
@@ -250,7 +345,7 @@ def _stocks_section(stock_movers):
     """
 
 
-def _render_news_item(it, accent_color, item_analysis):
+def _render_news_item(it, accent_color, item_analysis, number):
     dual_date = format_dual_date(it.get("published_dt_obj")) if it.get("published_dt_obj") else ""
     new_badge = '<span class="badge-new">جدید</span>' if it.get("is_new") else ""
     analysis_block = ""
@@ -263,12 +358,15 @@ def _render_news_item(it, accent_color, item_analysis):
         """
     return f"""
     <div class="news-item" style="border-right-color:{accent_color};">
-      <div class="news-source">{it['source']}{new_badge}</div>
-      <div class="news-title">{it['title']}</div>
-      <div class="news-meta">{dual_date}</div>
-      <div class="news-actions">
-        <a class="news-link" href="{it['link']}" target="_blank">مشاهده متن کامل خبر ←</a>
-        {analysis_block}
+      <div class="news-num" style="background:{accent_color};">{to_persian_digits(str(number))}</div>
+      <div class="news-body">
+        <div class="news-source">{it['source']}{new_badge}</div>
+        <div class="news-title">{it['title']}</div>
+        <div class="news-meta">{dual_date}</div>
+        <div class="news-actions">
+          <a class="news-link" href="{it['link']}" target="_blank">مشاهده متن کامل خبر ←</a>
+          {analysis_block}
+        </div>
       </div>
     </div>
     """
@@ -280,14 +378,14 @@ def _render_category_section(category, analysis):
     items = analysis.get("items", [])
     item_analyses = analysis.get("item_analyses", [])
     items_html = "".join(
-        _render_news_item(it, color, item_analyses[i] if i < len(item_analyses) else "")
+        _render_news_item(it, color, item_analyses[i] if i < len(item_analyses) else "", i + 1)
         for i, it in enumerate(items)
     )
     return f"""
     <section class="card" style="border-top-color:{color};">
       <h2 style="color:{color};">{icon} {category} <span class="count-badge">{len(items)} خبر</span></h2>
-      <p class="summary-box"><strong>جمع‌بندی:</strong> {analysis.get('summary', '')}</p>
-      {f'<p class="comparison-box"><strong>مقایسه منابع:</strong> {analysis.get("comparison")}</p>' if analysis.get('comparison') else ''}
+      <div class="summary-box"><div class="note-label"><strong>جمع‌بندی</strong></div>{_md(analysis.get('summary', ''))}</div>
+      {f'<div class="comparison-box"><div class="note-label"><strong>مقایسه منابع</strong></div>{_md(analysis.get("comparison"))}</div>' if analysis.get('comparison') else ''}
       <div class="items-list">
         {items_html if items_html else '<p class="empty">خبر جدیدی یافت نشد.</p>'}
       </div>
@@ -330,7 +428,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     stocks_html = _stocks_section(stock_movers or [])
 
     rollup_html = "".join(
-        f'<div class="note-card purple"><strong>📌 مهم‌ترین اخبار {label}:</strong> {text}</div>'
+        f'<div class="note-card purple"><div class="note-label">📌 <strong>مهم‌ترین اخبار {label}</strong></div>{_md(text)}</div>'
         for label, text in rollups.items() if text
     )
 
@@ -404,6 +502,16 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .note-card.amber {{ background: #fdf6e3; border-color: #c48a2e; }}
   .note-card.blue {{ background: #eaf1f8; border-color: var(--navy); }}
   .note-card.purple {{ background: #f1ecf6; border-color: #6c4f8c; }}
+  .note-label {{ font-size: 13.5px; margin-bottom: 6px; }}
+
+  /* متن‌های تولیدشده توسط مدل (خلاصه، پیش‌بینی، تحلیل، گزارش کریپتو) - بعد از تبدیل مارک‌داون به HTML */
+  .note-card p, .summary-box p, .comparison-box p, .card-note p {{ margin: 0 0 8px; }}
+  .note-card p:last-child, .summary-box p:last-child, .comparison-box p:last-child, .card-note p:last-child {{ margin-bottom: 0; }}
+  .md-list {{ margin: 4px 0 10px; padding-inline-start: 22px; }}
+  .md-list:last-child {{ margin-bottom: 0; }}
+  .md-list li {{ margin-bottom: 5px; line-height: 1.75; }}
+  .md-list li::marker {{ color: var(--muted); }}
+  .md-hr {{ border: none; border-top: 1px dashed var(--border); margin: 8px 0; }}
 
   .card {{
     background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px;
@@ -455,8 +563,14 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   input[id$="-y"]:checked ~ .tab-panels .panel-y {{ display: block; }}
 
   /* خبر */
-  .news-item {{ padding: 10px 10px 10px 0; border-bottom: 1px solid var(--border); border-right: 3px solid; margin-bottom: 2px; }}
+  .news-item {{ display: flex; gap: 10px; padding: 10px 10px 10px 0; border-bottom: 1px solid var(--border); border-right: 3px solid; margin-bottom: 2px; }}
   .news-item:last-child {{ border-bottom: none; }}
+  .news-num {{
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; color: #fff;
+    font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }}
+  .news-body {{ flex: 1; min-width: 0; }}
   .news-source {{ font-size: 10.5px; font-weight: 700; color: #b91c1c; margin-bottom: 3px; }}
   .badge-new {{ display: inline-block; background: var(--up); color: #fff; font-size: 9.5px; padding: 1px 7px; border-radius: 20px; margin-right: 6px; font-weight: 600; }}
   .news-title {{ font-weight: 700; font-size: 14.5px; line-height: 1.6; }}
@@ -486,8 +600,8 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   {currency_section_html}
   {currency_overlays}
   {rollup_html}
-  <div class="note-card amber">📈 <strong>پیش‌بینی اقتصادی:</strong> {forecast_text}</div>
-  <div class="note-card blue">🏛️ <strong>تحلیل سیاسی:</strong> {political_text}</div>
+  <div class="note-card amber"><div class="note-label">📈 <strong>پیش‌بینی اقتصادی</strong></div>{_md(forecast_text)}</div>
+  <div class="note-card blue"><div class="note-label">🏛️ <strong>تحلیل سیاسی</strong></div>{_md(political_text)}</div>
   {crypto_html}
   {stocks_html}
   {gold_html}
