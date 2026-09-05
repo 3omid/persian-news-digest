@@ -49,6 +49,10 @@ def _telegram_source(channel, tag):
 # ---------------------------------------------------------------
 # ۱) منابع RSS به تفکیک دسته (گروه‌بندی خواسته‌شده توسط کاربر)
 # ---------------------------------------------------------------
+# ترتیب دسته‌ها عمدا اینجا مشخصه (نه فقط اسم کلید): دسته‌های «اخبار جدی/روز» (اقتصاد،
+# سیاست داخلی/خارجی، جنگ) همه کنار هم میان تا خواننده گیج نشه که چرا یهو از سیاست پرید
+# به ورزش و برگشت به جنگ؛ بعدش دسته‌های سبک‌تر (ورزش، مهاجرت، تک/گیم) میان. همینترتیب
+# هم تو گزارش HTML و هم تو خلاصه تلگرام استفاده می‌شه (main.py از همین دیکشنری می‌خونه).
 RSS_SOURCES = {
     "اقتصادی": [
         {"name": "BBC Persian - اقتصادی", "url": "https://feeds.bbci.co.uk/persian/rss.xml", "tag": "اقتصاد"},
@@ -78,10 +82,6 @@ RSS_SOURCES = {
          "tag": "foreign policy re: Iran - TO VERIFY"},
         _telegram_source(TELEGRAM_CHANNELS[6], "کانال تلگرام - سیاسی خارجی"),
     ],
-    "ورزشی": [
-        {"name": "BBC Persian - ورزشی", "url": "https://feeds.bbci.co.uk/persian/sport/rss.xml", "tag": "ورزش"},
-        {"name": "BBC Sport (EN)", "url": "https://feeds.bbci.co.uk/sport/rss.xml", "tag": "sport"},
-    ],
     "جنگ ایران": [
         {"name": "BBC Persian", "url": "https://feeds.bbci.co.uk/persian/rss.xml", "tag": "جنگ"},
         {"name": "Al Jazeera - Middle East", "url": "https://www.aljazeera.com/xml/rss/all.xml", "tag": "middle east"},
@@ -94,6 +94,10 @@ RSS_SOURCES = {
         _telegram_source(TELEGRAM_CHANNELS[1], "کانال تلگرام - جنگ"),
         _telegram_source(TELEGRAM_CHANNELS[2], "کانال تلگرام - جنگ"),
         _telegram_source(TELEGRAM_CHANNELS[3], "کانال تلگرام - جنگ"),
+    ],
+    "ورزشی": [
+        {"name": "BBC Persian - ورزشی", "url": "https://feeds.bbci.co.uk/persian/sport/rss.xml", "tag": "ورزش"},
+        {"name": "BBC Sport (EN)", "url": "https://feeds.bbci.co.uk/sport/rss.xml", "tag": "sport"},
     ],
     "مهاجرت کانادا": [
         {"name": "CIC News", "url": "https://www.cicnews.com/feed", "tag": "immigration"},
