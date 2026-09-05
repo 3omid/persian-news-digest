@@ -71,6 +71,13 @@ def get_all_currencies():
     result = {}
     for pair_name, series_id in config.TRACKED_CURRENCIES.items():
         result[pair_name] = get_currency_series(series_id)
+
+    # ارزهای بدون سری مستقیم بانک مرکزی کانادا (مثل AED که نرخش به دلار آمریکا ثابته/Peg) -
+    # از روی سری پایه‌ای که بالا واکشی شده محاسبه می‌شن، نه از یک API جداگانه.
+    for pair_name, spec in getattr(config, "COMPUTED_CURRENCIES", {}).items():
+        base_series = result.get(spec["base"], [])
+        divisor = spec.get("divide_by", 1) or 1
+        result[pair_name] = [(date, val / divisor) for date, val in base_series]
     return result
 
 
