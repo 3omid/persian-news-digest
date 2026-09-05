@@ -16,6 +16,7 @@
 """
 
 import argparse
+import html
 import logging
 from datetime import datetime
 
@@ -132,16 +133,22 @@ def main():
     )
     log.info(f"گزارش ساخته شد: {report_path}")
 
+    # پیام تلگرام قبلا کاملا متن ساده بود (بدون بولد/بولت/جداکننده) و همه‌چیز به‌هم
+    # چسبیده به‌نظر می‌رسید. اینجا با parse_mode=HTML (تو send_telegram.py) عنوان هر
+    # دسته بولد می‌شه و بین دسته‌ها یه خط جداکننده می‌ذاریم تا از هم مشخص باشن.
     lines = []
     for cat, a in category_analyses.items():
         if not a.get("items"):
             continue
+        icon = generate_report.CATEGORY_STYLE.get(cat, {}).get("icon", "📰")
+        cat_esc = html.escape(cat)
         summary = a.get("summary", "")
         if summary.startswith("خطا در تحلیل خودکار"):
-            lines.append(f"- {cat}: ⚠️ خلاصه این بخش به‌دلیل خطای موقت آماده نشد (اخبار کامل در فایل پیوست هست).")
+            body = "⚠️ خلاصه این بخش به‌دلیل خطای موقت آماده نشد (اخبار کامل در فایل پیوست هست)."
         else:
-            lines.append(f"- {cat}: {_smart_truncate(summary, 280)}")
-    short_summary = "📰 خلاصه اخبار:\n\n" + "\n".join(lines)
+            body = html.escape(_smart_truncate(summary, 280))
+        lines.append(f"{icon} <b>{cat_esc}</b>\n{body}")
+    short_summary = "📰 <b>خلاصه اخبار</b>\n\n" + "\n\n➖➖➖➖➖\n\n".join(lines)
     send_telegram.send_report(report_path, short_summary)
 
 
