@@ -479,9 +479,9 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     if stocks_html and stocks_html.strip():
         est_height = HEADER_OVERHEAD + len(stock_movers or []) * PER_ROW_ITEM
         big_blocks.append((est_height, stocks_html))
-    if gold_html and gold_html.strip():
-        est_height = HEADER_OVERHEAD + (len(gold_coin_prices or {})) * PER_ROW_ITEM
-        big_blocks.append((est_height, gold_html))
+    # نکته: gold_html عمداً اینجا به big_blocks اضافه نمی‌شه و در توزیع حریصانه‌ی ستون‌ها
+    # شرکت نمی‌کنه - طبق درخواست کاربر باید همیشه بلافاصله بعد از بخش ارزها/دلار بیاد،
+    # نه هرجایی که الگوریتم چیدمان براش جا پیدا کنه (پایین‌تر، در قالب نهایی درج می‌شه).
 
     num_cols = 3
     col_heights = [0] * num_cols
@@ -527,8 +527,20 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     --border: #e3e7ee;
   }}
   * {{ box-sizing: border-box; }}
+  html {{
+    /* بدون این، سافاری آیفون گاهی خودش سایز فونت رو موقع چرخش صفحه تغییر می‌ده که
+       باعث می‌شه فونت ناخواسته تار/بی‌کیفیت به نظر برسه. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }}
   html, body, div, span, h1, h2, h3, p, a, label, summary, input {{
     font-family: 'Vazirmatn', Tahoma, Arial, sans-serif !important;
+    /* رندر فونت روی وب‌کیت/سافاری (به‌خصوص آیفون) بدون این پرچم‌ها ضخیم‌تر و
+       کم‌کیفیت‌تر از نسخه‌ی دسکتاپ دیده می‌شه. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-text-stroke: 0;
   }}
   body {{
     background: var(--bg); color: var(--text); margin: 0; padding: 0;
@@ -692,6 +704,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   {hero_html}
   {currency_section_html}
   {currency_overlays}
+  {gold_html}
   {rollup_html}
   <div class="note-card amber"><div class="note-label">📈 <strong>پیش‌بینی اقتصادی</strong></div>{_md(forecast_text)}</div>
   <div class="note-card blue"><div class="note-label">🏛️ <strong>تحلیل سیاسی</strong></div>{_md(political_text)}</div>
