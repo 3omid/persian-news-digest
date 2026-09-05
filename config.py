@@ -8,8 +8,10 @@
 نکته درباره ایران اینترنشنال و VOA فارسی:
 این دو منبع عمدا به چند دسته اضافه شدن (سیاسی داخلی/خارجی/جنگ) چون دیدگاه "خارج از کشور"
 میدن و مکمل BBC/ایرنا هستن - در تحلیل (analyze.py) از Claude خواسته شده این تفاوت دیدگاه رو
-توی بخش "مقایسه منابع" مشخص کنه. آدرس‌های iranintl.com/fa/feed و ir.voanews.com/rssfeeds
-با علامت "TO VERIFY" مشخص شدن چون در این محیط قابل تست زنده نبودن.
+توی بخش "مقایسه منابع" مشخص کنه. آدرس iranintl.com/fa/feed با علامت "TO VERIFY" مشخصه چون
+در این محیط قابل تست زنده نبود. آدرس VOA فارسی (ir.voanews.com/api/) تایید شده و زنده است
+(آدرس قبلی ir.voanews.com/rssfeeds یک صفحه لیست‌فید بود نه یک فید واقعی، برای همین هیچ‌وقت
+خبر نمی‌آورد - اصلاحش کردیم).
 همچنین توجه: سرویس VOA فارسی مارس ۲۰۲۵ به‌خاطر دستور اجرایی دولت آمریکا موقتا تعطیل شد
 و ژوئن ۲۰۲۵ دوباره فعال شد - اگه فید کار نکرد یعنی احتمالا دوباره وضعیتش تغییر کرده،
 با یک جستجوی سریع بررسی کن.
@@ -22,19 +24,16 @@ import os
 # ---------------------------------------------------------------
 # نکته مهم: تلگرام خودش RSS نداره، از سرویس عمومی و رایگان RSSHub استفاده می‌کنیم
 # (rsshub.app/telegram/channel/USERNAME). چون در این محیط نمی‌تونستم تلگرام رو باز کنم،
-# یوزرنیم دقیق هرکدوم رو خودت باید پر کنی: تو اپ تلگرام روی نام کانال بزن -> Share -> یوزرنیم
-# (چیزی که با @ شروع می‌شه) رو اینجا جایگزین PLACEHOLDER کن.
-# اگه rsshub.app کند/قطع بود، می‌تونی خودت یک نمونه RSSHub رایگان روی رندر/ورسل دیپلوی کنی
-# (مستندات: https://docs.rsshub.app/deploy/).
+# یوزرنیم‌های واقعی (تایید شده - از لینک‌های t.me خود کاربر گرفته و زنده بررسی شدن).
 TELEGRAM_CHANNELS = [
-    {"name": "وحید هدلاین", "username": "PLACEHOLDER_vahid_headline"},
-    {"name": "چرک‌نویس مدیا (CMO)", "username": "PLACEHOLDER_cherlinews"},
-    {"name": "هدف آزادی", "username": "PLACEHOLDER_hadaf_azadi"},
-    {"name": "IndyPersian", "username": "PLACEHOLDER_indypersian"},
-    {"name": "شب‌نامه", "username": "PLACEHOLDER_shabnameh"},
-    {"name": "مملکته", "username": "PLACEHOLDER_mamlekate"},
-    {"name": "وحید آنلاین", "username": "PLACEHOLDER_vahid_online"},
-    {"name": "Iranwire", "username": "PLACEHOLDER_iranwire"},
+    {"name": "وحید هدلاین", "username": "VahidHeadline"},
+    {"name": "چرک‌نویس مدیا (CMO)", "username": "Rfrens"},
+    {"name": "هدف آزادی", "username": "hadafazadi2022"},
+    {"name": "IndyPersian", "username": "Indypersian"},
+    {"name": "شب‌نامه", "username": "Rppress0"},
+    {"name": "مملکته", "username": "mamlekate"},
+    {"name": "وحید آنلاین", "username": "VahidOnline"},
+    {"name": "Iranwire", "username": "Farsi_Iranwire"},
 ]
 
 
@@ -69,8 +68,8 @@ RSS_SOURCES = {
         {"name": "ایرنا (رسمی داخل ایران)", "url": "https://www.irna.ir/rss", "tag": "سیاست ایران - دیدگاه رسمی داخل ایران"},
         {"name": "ایران اینترنشنال (دیدگاه خارج از کشور)", "url": "https://www.iranintl.com/fa/feed",
          "tag": "سیاست ایران - دیدگاه منتقد/خارج از کشور - TO VERIFY"},
-        {"name": "صدای آمریکا فارسی - VOA (دیدگاه خارج از کشور)", "url": "https://ir.voanews.com/rssfeeds",
-         "tag": "سیاست ایران - دیدگاه دولت آمریکا/خارج از کشور - TO VERIFY (این صفحه لیست فیدهاست، آدرس دقیق XML رو از داخلش کپی کن)"},
+        {"name": "صدای آمریکا فارسی - VOA (دیدگاه خارج از کشور)", "url": "https://ir.voanews.com/api/",
+         "tag": "سیاست ایران - دیدگاه دولت آمریکا/خارج از کشور"},
         _telegram_source(TELEGRAM_CHANNELS[0], "کانال تلگرام - سیاسی داخلی"),
         _telegram_source(TELEGRAM_CHANNELS[4], "کانال تلگرام - سیاسی داخلی"),
         _telegram_source(TELEGRAM_CHANNELS[7], "کانال تلگرام - سیاسی داخلی"),
@@ -89,8 +88,8 @@ RSS_SOURCES = {
          "url": "https://news.google.com/rss/search?q=Iran+war&hl=en-US&gl=US&ceid=US:en", "tag": "iran war"},
         {"name": "ایران اینترنشنال (دیدگاه خارج از کشور)", "url": "https://www.iranintl.com/fa/feed",
          "tag": "جنگ - دیدگاه خارج از کشور - TO VERIFY"},
-        {"name": "صدای آمریکا فارسی (دیدگاه دولت آمریکا)", "url": "https://ir.voanews.com/rssfeeds",
-         "tag": "جنگ - دیدگاه آمریکا - TO VERIFY"},
+        {"name": "صدای آمریکا فارسی (دیدگاه دولت آمریکا)", "url": "https://ir.voanews.com/api/",
+         "tag": "جنگ - دیدگاه آمریکا"},
         _telegram_source(TELEGRAM_CHANNELS[1], "کانال تلگرام - جنگ"),
         _telegram_source(TELEGRAM_CHANNELS[2], "کانال تلگرام - جنگ"),
         _telegram_source(TELEGRAM_CHANNELS[3], "کانال تلگرام - جنگ"),
@@ -126,8 +125,9 @@ RSS_SOURCES = {
 # ۲) منابع نرخ ارز
 # ---------------------------------------------------------------
 # نرخ رسمی/بین‌بانکی کانادا (Bank of Canada - رسمی و پایدار)
-# ۵ ارز مهم - دلار آمریکا و پوند/یورو/ین/یوان در برابر دلار کانادا.
-# لیست کامل سری‌ها: https://www.bankofcanada.ca/valet/lists/series/json (دنبال FX... بگرد)
+# ۱۰ ارز برتر - در برابر دلار کانادا. لیست کامل سری‌ها:
+# https://www.bankofcanada.ca/valet/lists/series/json (دنبال FX... بگرد)
+# ۹ تا از این ۱۰ ارز سری مستقیم بانک مرکزی کانادا دارن (تایید شده - زنده بررسی شد).
 TRACKED_CURRENCIES = {
     "USD/CAD": "FXUSDCAD",
     "EUR/CAD": "FXEURCAD",
@@ -135,6 +135,17 @@ TRACKED_CURRENCIES = {
     "JPY/CAD": "FXJPYCAD",
     "CNY/CAD": "FXCNYCAD",
     "TRY/CAD": "FXTRYCAD",
+    "AUD/CAD": "FXAUDCAD",
+    "CHF/CAD": "FXCHFCAD",
+    "INR/CAD": "FXINRCAD",
+}
+# درهم امارات (AED) تو لیست سری‌های بانک مرکزی کانادا نیست (بررسی شد - وجود نداره)، چون
+# درهم از سال ۱۹۹۷ نرخش به دلار آمریکا کاملا ثابته (Peg رسمی، هیچ‌وقت تغییر نمی‌کنه).
+# برای همین AED/CAD مستقیم واکشی نمی‌شه، بلکه از روی سری USD/CAD که همینجا داریم محاسبه می‌شه:
+# AED/CAD = (USD/CAD) ÷ AED_PER_USD
+AED_PER_USD = 3.6725
+COMPUTED_CURRENCIES = {
+    "AED/CAD": {"base": "USD/CAD", "divide_by": AED_PER_USD},
 }
 # برای نمودار سالانه به چند سال تاریخچه نیاز داریم - این تعداد سال رو از امروز به عقب می‌گیره
 BOC_HISTORY_YEARS = 6
@@ -179,22 +190,23 @@ OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 # ۵ غول تک آمریکا + ۵ شرکت بزرگ بورس کانادا (TSX) - چون این ترکیبی‌ه که هم به تو (مقیم کانادا)
 # مرتبطه هم شرکت‌های شناخته‌شده جهانی رو پوشش می‌ده. هر وقت خواستی می‌تونی شرکت‌های
 # جهانی دیگه (مثل TSM, ASML) رو هم اضافه کنی.
-# نمادهای کانادایی با پسوند .ca روی Stooq علامت‌گذاری شدن - این پسوند رو من تایید زنده نکردم
-# (TO VERIFY)، چون این محیط اینترنت نداره؛ حتما قبل از اجرای واقعی تستش کن.
+# نکته: منبع قبلی (Stooq) کاملا از کار افتاده بود (همه‌ی این ۱۰ نماد ۴۰۴ برمی‌گردوندن).
+# جایگزین شد با API غیررسمی و رایگان Chart یاهو فایننس (نیاز به کلید نداره، زنده تست شد).
+# فرمت نماد یاهو: شرکت‌های آمریکایی بدون پسوند (AAPL)، شرکت‌های بورس تورنتو با پسوند .TO (RY.TO).
 WATCHLIST_STOCKS = [
-    {"symbol": "aapl.us", "name": "Apple"},
-    {"symbol": "msft.us", "name": "Microsoft"},
-    {"symbol": "nvda.us", "name": "Nvidia"},
-    {"symbol": "amzn.us", "name": "Amazon"},
-    {"symbol": "googl.us", "name": "Google"},
-    {"symbol": "ry.ca", "name": "Royal Bank of Canada"},       # TO VERIFY
-    {"symbol": "shop.ca", "name": "Shopify"},                   # TO VERIFY
-    {"symbol": "cnq.ca", "name": "Canadian Natural Resources"}, # TO VERIFY
-    {"symbol": "enb.ca", "name": "Enbridge"},                   # TO VERIFY
-    {"symbol": "td.ca", "name": "TD Bank"},                     # TO VERIFY
+    {"symbol": "AAPL", "name": "Apple"},
+    {"symbol": "MSFT", "name": "Microsoft"},
+    {"symbol": "NVDA", "name": "Nvidia"},
+    {"symbol": "AMZN", "name": "Amazon"},
+    {"symbol": "GOOGL", "name": "Google"},
+    {"symbol": "RY.TO", "name": "Royal Bank of Canada"},
+    {"symbol": "SHOP.TO", "name": "Shopify"},
+    {"symbol": "CNQ.TO", "name": "Canadian Natural Resources"},
+    {"symbol": "ENB.TO", "name": "Enbridge"},
+    {"symbol": "TD.TO", "name": "TD Bank"},
 ]
-STOOQ_QUOTE_URL_TMPL = "https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlc&h&e=csv"
-STOOQ_HISTORY_URL_TMPL = "https://stooq.com/q/d/l/?s={symbol}&i=d"
+# ۵ روز اخیر رو یکجا می‌گیریم (هم برای تغییر روزانه هم هفتگی کافیه - یک درخواست به‌جای دوتا).
+YAHOO_CHART_URL_TMPL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d"
 
 # ---------------------------------------------------------------
 # ۲.۱) طلا و کریپتوکارنسی
