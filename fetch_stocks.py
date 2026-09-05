@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-برترین شرکت‌ها (روزانه/هفتگی) - از Stooq (رایگان، بدون نیاز به کلید API).
+برترین شرکت‌ها (روزانه/هفتگی) - از API غیررسمی و رایگان Chart یاهو فایننس.
+(منبع قبلی، Stooq، کاملا از کار افتاده بود - همه نمادها ۴۰۴ برمی‌گردوندن.)
 """
 
-import csv
-import io
 import logging
-from datetime import datetime, timedelta
 
 import requests
 
@@ -14,42 +12,34 @@ import config
 
 log = logging.getLogger(__name__)
 
+_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-def _fetch_daily_quote(symbol):
-    """قیمت باز/بسته امروز - برای محاسبه تغییر روزانه."""
-    url = config.STOOQ_QUOTE_URL_TMPL.format(symbol=symbol)
+
+def _fetch_daily_history(symbol):
+    """
+    ۵ روز اخیر معاملاتی روزانه (باز/بسته) رو یکجا می‌گیره - هم برای محاسبه تغییر
+    روزانه (امروز) هم تغییر هفتگی (نسبت به ۵ روز پیش) کافیه، بدون نیاز به دو درخواست جدا.
+    """
+    url = config.YAHOO_CHART_URL_TMPL.format(symbol=symbol)
     try:
-        resp = requests.get(url, timeout=15)
+        resp = requests.get(url, timeout=15, headers=_HEADERS)
         resp.raise_for_status()
-        reader = csv.DictReader(io.StringIO(resp.text))
-        row = next(reader, None)
-        if not row or row.get("Open") in (None, "N/D"):
+        data = resp.json()
+        result = ((data or {}).get("chart") or {}).get("result") or []
+        if not result:
             return None
-        open_price = float(row["Open"])
-        close_price = float(row["Close"])
-        return {"open": open_price, "close": close_price}
+        quotes = result[0]["indicators"]["quote"][0]
+        opens = [v for v in quotes.get("open", []) if v is not None]
+        closes = [v for v in quotes.get("close", []) if v is not None]
+        if not opens or not closes:
+            return None
+        return {
+            "today_open": opens[-1],
+            "today_close": closes[-1],
+            "week_open": opens[0],
+        }
     except Exception as e:
-        log.error(f"خطا در دریافت قیمت روزانه {symbol}: {e}")
-        return None
-
-
-def _fetch_weekly_change(symbol):
-    """۵ روز اخیر معاملاتی - برای محاسبه تغییر هفتگی."""
-    url = config.STOOQ_HISTORY_URL_TMPL.format(symbol=symbol)
-    try:
-        resp = requests.get(url, timeout=15)
-        resp.raise_for_status()
-        reader = list(csv.DictReader(io.StringIO(resp.text)))
-        if len(reader) < 6:
-            return None
-        last5 = reader[-5:]
-        start_price = float(last5[0]["Open"])
-        end_price = float(last5[-1]["Close"])
-        if not start_price:
-            return None
-        return (end_price - start_price) / start_price * 100
-    except Exception as e:
-        log.error(f"خطا در دریافت تاریخچه هفتگی {symbol}: {e}")
+        log.error(f"خطا در دریافت تاریخچه قیمت {symbol}: {e}")
         return None
 
 
@@ -61,15 +51,17 @@ def get_stock_movers():
     results = []
     for stock in config.WATCHLIST_STOCKS:
         symbol = stock["symbol"]
-        daily = _fetch_daily_quote(symbol)
-        if not daily or not daily["open"]:
+        hist = _fetch_daily_history(symbol)
+        if not hist or not hist["today_open"]:
             continue
-        change_day = (daily["close"] - daily["open"]) / daily["open"] * 100
-        change_week = _fetch_weekly_change(symbol)
+        change_day = (hist["today_close"] - hist["today_open"]) / hist["today_open"] * 100
+        change_week = None
+        if hist.get("week_open"):
+            change_week = (hist["today_close"] - hist["week_open"]) / hist["week_open"] * 100
         results.append({
             "name": stock["name"],
             "symbol": symbol,
-            "price": daily["close"],
+            "price": hist["today_close"],
             "change_day_pct": change_day,
             "change_week_pct": change_week,
         })
