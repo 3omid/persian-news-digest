@@ -248,20 +248,66 @@ def _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=None)
     else:
         usd_unit_line = "تومان"
 
+    # کارت‌ها به نمودار نرخ USD/CAD لینک می‌شن (طبق درخواست کاربر که این دوتا کارت
+    # برخلاف ردیف‌های ارزهای دیگه، قابل کلیک نبودن و آماری نشون نمی‌دادن).
+    has_usdcad_chart = bool(resampled_currencies.get("USD/CAD", {}).get("daily"))
+    href_attr = ' href="#chart-usdcad"' if has_usdcad_chart else ""
+    tag = "a" if has_usdcad_chart else "div"
+
     return f"""
     <div class="hero-pair">
-      <div class="hero-card">
+      <{tag} class="hero-card"{href_attr}>
         <div class="hero-label">💵 دلار آمریکا</div>
         <div class="hero-value">{to_persian_digits(f"{usd_toman:,.0f}")}</div>
         <div class="hero-unit">{usd_unit_line}</div>
-      </div>
-      <div class="hero-card">
+      </{tag}>
+      <{tag} class="hero-card"{href_attr}>
         <div class="hero-label">🍁 دلار کانادا</div>
         <div class="hero-value">{to_persian_digits(f"{cad_toman:,.0f}")}</div>
         <div class="hero-unit">تومان &nbsp; {'▲' if up else '▼'} {to_persian_digits(f"{abs(day_change):.2f}")}٪</div>
-      </div>
+      </{tag}>
     </div>
     """
+
+
+def _usd_cad_rate_note(resampled_currencies):
+    """
+    کاربر متوجه شده بود که کارت‌های بزرگ دلار آمریکا/کانادا بالای صفحه - برخلاف
+    ردیف‌های ارزهای دیگه پایین‌تر - قابل کلیک نیستن و هیچ آمار/نموداری نشون نمی‌دن،
+    و درخواست کرد که میزان نرخ برابری دلار آمریکا به کانادا (۱ دلار آمریکا چند دلار
+    کاناداست) و درصد تغییرش رو ببینه. این تابع یک ردیف کلیک‌شدنی می‌سازه که مستقیم
+    نرخ رسمی USD/CAD (بانک مرکزی کانادا) رو نشون می‌ده و به یک اورلی نموداری
+    (روزانه/ماهانه/سالانه) لینک می‌شه - دقیقا همون تجربه‌ای که ارزهای دیگه دارن.
+    نکته: این درصدِ تغییرِ خودِ نرخ USD/CAD هست (مثبت = دلار آمریکا در برابر کانادا
+    قوی‌تر شده)، نه درصد تغییر ارزش تومانی که تو کارت‌های بالا نمایش داده می‌شه -
+    این دو مفهوم متفاوتن و عمدا اینجا علامتش برعکس نمی‌شه.
+    """
+    usd_cad = resampled_currencies.get("USD/CAD", {})
+    daily = usd_cad.get("daily", [])
+    if len(daily) < 1:
+        return "", ""
+    latest = daily[-1][1]
+    prev = daily[-2][1] if len(daily) > 1 else latest
+    change_pct = ((latest - prev) / prev * 100) if prev else 0
+    up = change_pct >= 0
+    cls = "up" if up else "down"
+    arrow = "▲" if up else "▼"
+    slug = "usdcad"
+
+    note_html = f"""
+    <a class="rate-note" href="#chart-{slug}">
+      <span>💱 نرخ دلار آمریکا به کانادا: <bdi dir="ltr">۱ USD = {to_persian_digits(f"{latest:.3f}")} CAD</bdi></span>
+      <span class="row-change {cls}" style="margin-top:0;">{arrow} {to_persian_digits(f"{abs(change_pct):.2f}")}٪</span>
+    </a>
+    """
+    overlay_html = _chart_overlay(
+        slug, "دلار آمریکا به دلار کانادا (USD/CAD)",
+        "نرخ رسمی بانک مرکزی کانادا - نشون می‌ده هر ۱ دلار آمریکا معادل چند دلار کاناداست",
+        _line_chart(daily, "USD/CAD - Daily"),
+        _line_chart(usd_cad.get("monthly", []), "USD/CAD - Monthly"),
+        _line_chart(usd_cad.get("yearly", []), "USD/CAD - Yearly"),
+    )
+    return note_html, overlay_html
 
 
 def _currency_section(toman_rates, resampled_currencies):
@@ -467,7 +513,9 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     toman_rates = _fr.compute_toman_rates(iran_usd_toman, resampled_currencies)
 
     hero_html = _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=usd_change_percent)
+    usd_cad_note_html, usd_cad_overlay_html = _usd_cad_rate_note(resampled_currencies)
     currency_rows, currency_overlays = _currency_section(toman_rates, resampled_currencies)
+    currency_overlays = usd_cad_overlay_html + currency_overlays
     currency_section_html = f"""
     <section class="card" style="border-top-color:#1f3864;">
       <h2 style="color:#1f3864;">💱 ارزهای دیگر</h2>
@@ -548,10 +596,31 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>خلاصه اخبار - {now_str}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+  /* فونت Vazirmatn سلف‌هاست‌شده (به‌جای لینک به Google Fonts) - چون روی گوشی آیفون
+     کاربر فونت درست/واضح نمایش داده نمی‌شد. علت دقیقش (بلاک‌شدن fonts.googleapis.com
+     توسط شبکه/مرورگر/افزونه‌ای رو گوشی، یا تایم‌اوت لود فونت که باعث fallback به یه
+     فونت سیستمی می‌شه) قابل تشخیص از راه دور نبود، برای همین به‌جای امیدوار بودن به
+     لود درست یک فونت خارجی، خودِ فایل فونت (woff2, دو ساب‌ست عربی+لاتین که کل کاراکترهای
+     این گزارش رو پوشش می‌ده) داخل مخزن (assets/fonts) قرار گرفته و مستقیم از همون
+     GitHub Pages سرو می‌شه - دیگه هیچ وابستگی به دامنه‌ی دیگه‌ای نداره و رو هر
+     دستگاه/شبکه‌ای دقیقا همون فونتیه که رو کامپیوتر دیده می‌شه. */
+  @font-face {{
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('assets/fonts/vazirmatn-arabic.woff2') format('woff2');
+    unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+  }}
+  @font-face {{
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('assets/fonts/vazirmatn-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }}
   :root {{
     --bg: #eef1f5;
     --card: #ffffff;
@@ -619,12 +688,20 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .hero-card {{
     flex: 1; background: linear-gradient(135deg, var(--navy), var(--navy-dark)); color: #fff;
     border-radius: 16px; padding: 16px; text-align: center;
+    text-decoration: none; display: block;
   }}
+  a.hero-card {{ cursor: pointer; }}
   .hero-label {{ font-size: 12.5px; opacity: .85; margin-bottom: 4px; }}
   .hero-value {{ font-size: 24px; font-weight: 800; }}
   .hero-unit {{ font-size: 11.5px; opacity: .85; margin-top: 3px; }}
 
-  .rate-note {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; font-weight: 600; }}
+  .rate-note {{
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px 14px; margin-bottom: 12px; font-size: 13px; font-weight: 600;
+    text-decoration: none; color: inherit; cursor: pointer;
+  }}
+  .rate-note .row-change {{ display: inline; }}
 
   .note-card {{ border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; font-size: 13.5px; border-right: 4px solid; }}
   .note-card.amber {{ background: #fdf6e3; border-color: #c48a2e; }}
@@ -727,6 +804,26 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .empty {{ color: var(--muted); font-size: 13px; }}
 
   footer {{ text-align: center; padding: 22px; font-size: 11px; color: var(--muted); }}
+
+  /* روی گوشی (به‌خصوص آیفون)، خیلی از متن‌های ریز این صفحه (۱۰.۵ تا ۱۲.۵ پیکسل - برای
+     برچسب قیمت/واحد/منبع خبر/زمان و غیره) با وجود فونت درست (Vazirmatn)، به‌خاطر
+     ریزنقشی و پیچیدگی حروف فارسی نسبت به لاتین، در این سایزهای کوچیک کمتر واضح به‌نظر
+     می‌رسن - این ربطی به نوع فونت نداره، صرفا اندازه‌ی خیلی کوچیکشه. این بخش فقط زیر
+     ۴۸۰px عرض صفحه (یعنی موبایل، نه لپ‌تاپ) این سایزها رو کمی بزرگ‌تر می‌کنه تا خوانایی
+     بهتر بشه، بدون اینکه چیدمان دسکتاپ (که کاربر گفته خودش خوبه) تغییری کنه. */
+  @media (max-width: 480px) {{
+    body {{ font-size: 16px; }}
+    .hero-label, .weather-chip, header p {{ font-size: 13.5px; }}
+    .hero-unit {{ font-size: 13px; }}
+    .row-title, .row-price, .note-card, .note-label, .summary-box, .rate-note {{ font-size: 15px; }}
+    .comparison-box, .analysis-text {{ font-size: 14px; }}
+    .row-code, .row-unit, .row-change {{ font-size: 12.5px; }}
+    .card-note, .overlay-note, .overlay-close, .news-meta, .empty {{ font-size: 12.5px; }}
+    .news-source {{ font-size: 12px; }}
+    .news-link, .analysis-toggle, .tab-buttons label {{ font-size: 13.5px; }}
+    .crypto-cell-price, .crypto-chg, .crypto-cell-icon {{ font-size: 13px; }}
+    .count-badge {{ font-size: 12px; }}
+  }}
 </style>
 </head>
 <body>
@@ -740,6 +837,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
 </header>
 <div class="container">
   {hero_html}
+  {usd_cad_note_html}
   {currency_section_html}
   {currency_overlays}
   {gold_html}
