@@ -78,6 +78,15 @@ def fetch_all(db_path: str = None):
 
     results = {cat: [] for cat in config.RSS_SOURCES}
 
+    # جلوگیری از تکرار یک خبر واحد در چند دسته: بعضی منبع‌ها (مثل بی‌بی‌سی فارسی یا
+    # الجزیره) عمداً چندموضوعی هستن و زیر چند دسته در config.RSS_SOURCES لیست شدن، برای
+    # همین ممکنه یک خبر واحد (لینک/تیتر یکسان) توسط چند دسته‌ی مختلف مستقل از هم واکشی
+    # بشه. اینجا با یک fingerprint سراسری (همون هش _news_id) هر خبر فقط در اولین دسته‌ای
+    # که در ترتیب RSS_SOURCES بهش می‌رسیم (که خودش منعکس‌کننده‌ی اولویت/ربط منطقی
+    # دسته‌بندیه - مثلا «سیاسی داخلی» قبل از «جنگ ایران» و غیره) نگه داشته می‌شه و از
+    # بقیه‌ی دسته‌ها به‌طور خودکار حذف می‌شه، نه اینکه در چندجا تکراری نمایش داده بشه.
+    assigned_ids = set()
+
     for category, sources in config.RSS_SOURCES.items():
         category_items = []
         for src in sources:
@@ -99,6 +108,10 @@ def fetch_all(db_path: str = None):
                         continue  # قدیمی‌تر از بازه نمایش
 
                     nid = _news_id(link, title)
+                    if nid in assigned_ids:
+                        continue  # قبلا در یک دسته‌ی دیگه (با اولویت بالاتر) نمایش داده شده
+                    assigned_ids.add(nid)
+
                     first_seen_str = _get_or_mark_first_seen(conn, nid, title, src["name"], category)
                     first_seen_dt = datetime.fromisoformat(first_seen_str)
                     is_new = first_seen_dt >= notify_cutoff
