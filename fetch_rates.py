@@ -129,6 +129,88 @@ def resample_by_period(daily_series):
     return {"daily": daily, "monthly": monthly, "yearly": yearly}
 
 
+_LIVE_TICKER_URLS = [
+    "https://call4.tgju.org/ajax.json",
+    "https://call3.tgju.org/ajax.json",
+    "https://call2.tgju.org/ajax.json",
+    "https://call1.tgju.org/ajax.json",
+]
+_live_ticker_cache = None
+
+
+def _get_live_ticker():
+    """
+    نرخ لحظه‌ای (نه فقط آخرین کندل بسته‌شده‌ی روز قبل) رو از فید عمومی تیکر خود tgju
+    می‌گیره - همون فیدی که خود سایت tgju.org برای نمایش «نرخ فعلی» بالای هر صفحه استفاده
+    می‌کنه. چرا این لازم شد: endpoint قبلی که فقط استفاده می‌کردیم (summary-table-data)
+    یک جدول تاریخچه‌ی روزانه‌ست و ردیف اولش «آخرین روزِ کامل‌شده» است، نه لحظه‌ی الان -
+    وقتی بازار ایران (دلار/طلا) روزی چند درصد نوسان می‌کنه، این می‌تونست باعث بشه عددی که
+    نشون می‌دادیم یک تا دو روز و چند درصد از قیمت واقعی لحظه‌ای عقب‌تر باشه - دقیقا همون
+    چیزی که کاربر بهش گیر داد. نتیجه برای کل یک اجرای برنامه cache می‌شه که برای هر
+    شاخص (دلار، هر طلا/سکه) دوباره کل فایل (~۱۷۰KB) دانلود نشه.
+    """
+    global _live_ticker_cache
+    if _live_ticker_cache is not None:
+        return _live_ticker_cache
+    for url in _LIVE_TICKER_URLS:
+        try:
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            current = resp.json().get("current")
+            if isinstance(current, dict) and current:
+                _live_ticker_cache = current
+                return current
+        except Exception as e:
+            log.warning(f"فید لحظه‌ای tgju از {url} در دسترس نبود: {e}")
+    _live_ticker_cache = {}
+    return _live_ticker_cache
+
+
+def _live_price_and_change(slug):
+    """
+    از فید لحظه‌ای، قیمت (p) و درصد تغییر روزانه (dp) شاخص slug رو برمی‌گردونه (به ریال،
+    مثل جدول تاریخچه). اگه شاخص تو فید لحظه‌ای نبود یا قابل‌پارس نبود، (None, None)
+    برمی‌گردونه تا کد بالادستی خودش بره سراغ روش قدیمی (جدول تاریخچه) به‌عنوان جایگزین.
+    """
+    entry = _get_live_ticker().get(slug)
+    if not isinstance(entry, dict):
+        return None, None
+    try:
+        price = float(str(entry.get("p", "")).replace(",", "").strip())
+    except (ValueError, TypeError):
+        return None, None
+    if price <= 0:
+        return None, None
+    change = entry.get("dp")
+    try:
+        change = float(change) if change not in (None, "") else None
+    except (ValueError, TypeError):
+        change = None
+    return price, change
+
+
+def _prefer_live(live_value, fallback_value, tolerance=0.3):
+    """
+    اگه قیمت لحظه‌ای در دسترس بود و با قیمت جدول تاریخچه (fallback) خیلی فرق نداشت
+    (حداکثر ۳۰٪ فاصله - چون دلار/طلای ایران گاهی روزی چند درصد نوسان می‌کنه ولی نه چند
+    برابر)، قیمت لحظه‌ای (تازه‌تر) رو برمی‌گردونه. اگه فاصله غیرمنطقی بود (نشونه‌ی یک
+    باگ پارس/واحد پول تو فید لحظه‌ای) یا جدول تاریخچه در دسترس نبود، به‌جای ریسک نمایش
+    عدد غلط، به fallback امن قدیمی برمی‌گرده (یا اگه اونم نبود، به همون قیمت لحظه‌ای).
+    """
+    if live_value is None:
+        return fallback_value
+    if fallback_value is None or fallback_value <= 0:
+        return live_value
+    ratio = live_value / fallback_value
+    if (1 - tolerance) <= ratio <= (1 + tolerance):
+        return live_value
+    log.warning(
+        f"قیمت لحظه‌ای ({live_value}) خیلی با قیمت جدول تاریخچه ({fallback_value}) فرق "
+        f"داره (نسبت {ratio:.2f}) - احتمال باگه، از قیمت جدول تاریخچه استفاده می‌شه."
+    )
+    return fallback_value
+
+
 def get_gold_coin_prices():
     """
     قیمت طلا و سکه ایران به سبک tgju.org (تومان).
@@ -138,21 +220,30 @@ def get_gold_coin_prices():
     نکته مهم: اسلاگ‌های اندیکاتور tgju (مثل price_dollar_rl) با پسوند "_rl" مقدار را به
     **ریال** برمی‌گردانند، نه تومان (۱ تومان = ۱۰ ریال). چون کل سایت مقادیر را با برچسب
     «تومان» نمایش می‌دهد، باید همینجا بر ۱۰ تقسیم شود تا عدد نمایش‌داده‌شده درست باشد.
+    برای تازه بودن قیمت، اول فید لحظه‌ای امتحان می‌شه و در صورت نبود/غیرمنطقی بودن، به
+    جدول تاریخچه (روش قبلی) برمی‌گرده - رجوع کن به _prefer_live.
     """
     results = {}
     for title, slug in config.GOLD_COIN_INDICATORS.items():
+        history_price = None
         url = config.TGJU_INDICATOR_URL_TMPL.format(slug=slug)
         try:
             resp = requests.get(url, timeout=15)
             resp.raise_for_status()
-            data = resp.json()
-            price = _parse_tgju_price(data)
-            if price:
-                results[title] = {"price": price / 10, "slug": slug}
-            else:
-                log.warning(f"ساختار پاسخ tgju برای {title} ({slug}) قابل شناسایی نبود.")
+            raw = _parse_tgju_price(resp.json())
+            if raw is not None:
+                history_price = raw / 10
         except Exception as e:
-            log.error(f"خطا در دریافت {title} ({slug}): {e}")
+            log.error(f"خطا در دریافت {title} ({slug}) از جدول تاریخچه: {e}")
+
+        live_raw, _ = _live_price_and_change(slug)
+        live_price = (live_raw / 10) if live_raw is not None else None
+        price = _prefer_live(live_price, history_price)
+
+        if price:
+            results[title] = {"price": price, "slug": slug}
+        else:
+            log.warning(f"نه فید لحظه‌ای نه جدول تاریخچه برای {title} ({slug}) در دسترس نبود.")
 
     # طلای دست دوم شاخص رسمی نداره - تخمین تقریبی از روی طلای ۱۸ عیار
     if "طلای ۱۸ عیار" in results:
@@ -172,29 +263,44 @@ def get_iran_usd_toman():
     نکته مهم: اسلاگ endpoint (price_dollar_rl) با پسوند "_rl" نشون می‌ده مقدار برگشتی
     **ریال** است نه تومان (۱ تومان = ۱۰ ریال) - برای همین اینجا بر ۱۰ تقسیم می‌شه تا
     عددی که در همه‌جای سایت با برچسب «تومان» نمایش داده می‌شه واقعاً تومان باشه.
+    برای تازه بودن نرخ (نه فقط آخرین کندل بسته‌شده‌ی روز قبل که می‌تونست چند درصد عقب‌تر
+    از بازار لحظه‌ای باشه)، اول فید لحظه‌ای تیکر tgju امتحان می‌شه؛ رجوع کن به _prefer_live
+    برای منطق برگشت به جدول تاریخچه در صورت نبود/غیرمنطقی بودن فید لحظه‌ای.
     """
+    history_price = None
     try:
         resp = requests.get(config.IRAN_USD_TOMAN_URL, timeout=15)
         resp.raise_for_status()
-        data = resp.json()
-        price = _parse_tgju_price(data)
-        if price is not None:
-            return price / 10
-        log.warning("ساختار پاسخ tgju قابل شناسایی نبود - بخش تومانی رد می‌شه.")
-        return None
+        raw = _parse_tgju_price(resp.json())
+        if raw is not None:
+            history_price = raw / 10
+        else:
+            log.warning("ساختار پاسخ tgju (جدول تاریخچه) قابل شناسایی نبود.")
     except Exception as e:
-        log.error(f"خطا در دریافت نرخ دلار بازار آزاد ایران: {e}")
-        return None
+        log.error(f"خطا در دریافت نرخ دلار بازار آزاد ایران (جدول تاریخچه): {e}")
+
+    live_raw, _ = _live_price_and_change("price_dollar_rl")
+    live_price = (live_raw / 10) if live_raw is not None else None
+
+    price = _prefer_live(live_price, history_price)
+    if price is None:
+        log.warning("نه فید لحظه‌ای نه جدول تاریخچه‌ی دلار در دسترس نبود - بخش تومانی رد می‌شه.")
+    return price
 
 
 def get_iran_usd_toman_change_percent():
     """
     درصد تغییر روزانه‌ی دلار بازار آزاد تهران (مثبت یعنی گران‌تر شده، منفی یعنی ارزان‌تر).
-    از همون endpoint دلار (IRAN_USD_TOMAN_URL) استفاده می‌کنه، چون خود جدول تاریخچه‌ی
-    tgju این درصد رو همراه قیمت برمی‌گردونه - نیازی به endpoint یا درخواست جداگانه نیست.
-    اگه ساختار پاسخ قابل شناسایی نبود، None برمی‌گردونه (کارت دلار در گزارش این حالت رو
+    اول از فید لحظه‌ای تیکر tgju (تازه‌تر) استفاده می‌کنه؛ اگه در دسترس نبود یا عدد
+    غیرمنطقی بود (بیشتر از ۳۰٪ که برای نوسان یک‌روزه دلار ایران بعیده)، از همون جدول
+    تاریخچه‌ی قبلی (IRAN_USD_TOMAN_URL) به‌عنوان جایگزین استفاده می‌شه.
+    اگه هیچ‌کدوم قابل شناسایی نبود، None برمی‌گردونه (کارت دلار در گزارش این حالت رو
     با نمایش «بدون درصد تغییر» به‌جای عدد غلط/صفر مدیریت می‌کنه).
     """
+    _, live_change = _live_price_and_change("price_dollar_rl")
+    if live_change is not None and abs(live_change) <= 30:
+        return live_change
+
     try:
         resp = requests.get(config.IRAN_USD_TOMAN_URL, timeout=15)
         resp.raise_for_status()
