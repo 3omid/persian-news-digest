@@ -5,6 +5,7 @@
 """
 
 import logging
+import re
 from datetime import datetime, timedelta
 
 import requests
@@ -12,6 +13,37 @@ import requests
 import config
 
 log = logging.getLogger(__name__)
+
+
+def _parse_tgju_price(data):
+    """
+    tgju.org چند فرمت مختلف برگردونده و بدون اطلاع فرمتش رو عوض می‌کنه (API غیررسمیه).
+    فرمت جدیدی که الان برمی‌گردونه یک جدول تاریخچه‌ست:
+        {"data": [["228,348,000","228,348,000","235,710,000","235,188,000", "<span...>change</span>",
+                   "<span...>+2.99%</span>", "2026/09/03", "1405/06/12"], ...]}
+    ردیف صفر = جدیدترین روز، ستون‌ها به ترتیب [باز, کمترین, بیشترین, بسته/آخرین].
+    فرمت قدیمی‌تر (دیکشنری تک‌مقداری {"p"/"price"/"value"/"last": ...}) هم پشتیبانی می‌شه
+    که اگه یه روز دوباره برگرده، بدون تغییر کد کار کنه.
+    """
+    if isinstance(data, dict) and isinstance(data.get("data"), list) and data["data"]:
+        row = data["data"][0]
+        if isinstance(row, list) and len(row) > 3:
+            try:
+                return float(str(row[3]).replace(",", "").strip())
+            except (ValueError, TypeError):
+                pass
+
+    raw = data[0] if isinstance(data, list) and data else data
+    if isinstance(raw, dict):
+        for key in ("p", "price", "value", "last"):
+            if key in raw and raw[key] not in (None, ""):
+                try:
+                    return float(str(raw[key]).replace(",", "").strip())
+                except (ValueError, TypeError):
+                    continue
+    elif isinstance(raw, (int, float)):
+        return float(raw)
+    return None
 
 
 def get_currency_series(series_id: str):
@@ -84,15 +116,7 @@ def get_gold_coin_prices():
             resp = requests.get(url, timeout=15)
             resp.raise_for_status()
             data = resp.json()
-            raw = data[0] if isinstance(data, list) and data else data
-            price = None
-            if isinstance(raw, dict):
-                for key in ("p", "price", "value", "last"):
-                    if key in raw and raw[key] not in (None, ""):
-                        price = float(str(raw[key]).replace(",", "").strip())
-                        break
-            elif isinstance(raw, (int, float)):
-                price = float(raw)
+            price = _parse_tgju_price(data)
             if price:
                 results[title] = {"price": price, "slug": slug}
             else:
@@ -120,14 +144,9 @@ def get_iran_usd_toman():
         resp = requests.get(config.IRAN_USD_TOMAN_URL, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        raw = data[0] if isinstance(data, list) and data else data
-        if isinstance(raw, dict):
-            for key in ("p", "price", "value", "last"):
-                if key in raw and raw[key] not in (None, ""):
-                    val_str = str(raw[key]).replace(",", "").strip()
-                    return float(val_str)
-        elif isinstance(raw, (int, float)):
-            return float(raw)
+        price = _parse_tgju_price(data)
+        if price is not None:
+            return price
         log.warning("ساختار پاسخ tgju قابل شناسایی نبود - بخش تومانی رد می‌شه.")
         return None
     except Exception as e:
