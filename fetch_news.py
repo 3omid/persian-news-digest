@@ -13,6 +13,7 @@
 import sqlite3
 import hashlib
 import logging
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 import feedparser
@@ -115,9 +116,31 @@ def fetch_all(db_path: str = None):
             except Exception as e:
                 log.error(f"خطا در دریافت {src['name']}: {e}")
 
-        # جدیدترین‌ها اول، بعد فقط ۱۰ تای برتر رو نگه دار
+        # قبلا انتخاب «۱۰ تای برتر» فقط بر اساس تازگی بین همه منبع‌های این دسته با هم بود؛
+        # چون بی‌بی‌سی فارسی خیلی پرکارتر از منبع‌هایی مثل ایران‌اینترنشنال منتشر می‌کنه،
+        # عملا کل ۱۰ تا رو خودش پر می‌کرد و بقیه منبع‌ها حتی وقتی سالم بودن دیده نمی‌شدن
+        # (شکایت کاربر: «ایران‌اینترنشنال فقط یه خبر، بی‌بی‌سی یه عالمه»).
+        # الان به‌صورت چرخشی (round-robin) بین منبع‌های فعال این دسته می‌چرخیم تا هر
+        # منبعی که خبر داره سهم منصفانه‌ای از این ۱۰ تا داشته باشه، نه فقط پرکارترین.
         category_items.sort(key=lambda x: x["published_dt"], reverse=True)
-        top_items = category_items[: config.HEADLINES_PER_CATEGORY]
+        by_source = defaultdict(list)
+        for it in category_items:
+            by_source[it["source"]].append(it)
+        sources_ordered = sorted(by_source.keys(), key=lambda s: by_source[s][0]["published_dt"], reverse=True)
+
+        top_items = []
+        idx = 0
+        remaining = len(category_items)
+        while len(top_items) < config.HEADLINES_PER_CATEGORY and remaining > 0:
+            source = sources_ordered[idx % len(sources_ordered)]
+            if by_source[source]:
+                top_items.append(by_source[source].pop(0))
+                remaining -= 1
+            idx += 1
+
+        # بعد از انتخاب چرخشی، دوباره بر اساس تازگی مرتب می‌کنیم که تو گزارش نمایش
+        # منظم (جدیدترین اول) باشه - چرخش فقط برای «انتخاب» بود، نه ترتیب نمایش.
+        top_items.sort(key=lambda x: x["published_dt"], reverse=True)
         for it in top_items:
             it.pop("published_dt", None)  # فقط برای مرتب‌سازی لازم بود
         results[category] = top_items
