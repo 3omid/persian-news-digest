@@ -367,11 +367,19 @@ def _currency_section(toman_rates, resampled_currencies):
 def _gold_coin_section(gold_coin_prices):
     if not gold_coin_prices:
         return ""
+    # قیمت طلای ۱۸ و ۲۴ عیار (و طلای دست‌دوم که از رویش تخمین زده می‌شه) تو tgju.org
+    # همیشه قیمت «هر یک گرم» طلاست، نه یک واحد دیگه مثل مثقال - ولی قبلا این واحد رو
+    # کنار عددش ننوشته بودیم و کاربر دقیقا همینو گفت: عدد هست ولی معلوم نیست مال چه
+    # مقداری از طلاست. برای سکه‌ها (که فی‌نفسه یک قطعه‌ان، نه وزن خام طلا) این برچسب
+    # معنی نداره، برای همین فقط رو اسلاگ‌های «geram*» اضافه می‌شه.
+    GRAM_SLUGS = ("geram18", "geram24")
     rows = ""
     for title, info in gold_coin_prices.items():
         price_str = to_persian_digits(f"{info['price']:,.0f}")
         chart_url = config.TGJU_CHART_URL_TMPL.format(slug=info.get("slug", ""))
         label = title + (' <span class="row-code">تقریبی</span>' if info.get("approx") else "")
+        if info.get("slug") in GRAM_SLUGS:
+            label += ' <span class="row-code">هر گرم</span>'
         rows += _info_row("🥇", label, "", f'{price_str} <span class="row-unit">تومان</span>',
                            href=chart_url, external=True)
     return f"""
