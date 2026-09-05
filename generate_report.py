@@ -511,6 +511,13 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   @media (min-width: 860px) {{
     .container {{
       max-width: 1500px; column-width: 460px; column-gap: 18px; padding: 18px;
+      /* column-fill: balance (پیش‌فرض) وقتی چندتا کارت خیلی بلند (مثل کارت‌های خبری
+         ۱۰تایی، حدود ۱۷۰۰px) کنار چندتا کارت کوتاه (طلا، ارز) باشن و break-inside:avoid
+         هم روشون فعال باشه، محاسبه‌ی تعادل ارتفاع ستون‌ها به‌کل به‌هم می‌خوره و یه فاصله‌ی
+         خالی خیلی بزرگ (گاهی چند هزار پیکسل) وسط صفحه می‌ندازه. column-fill: auto این
+         مشکل رو حل می‌کنه: به‌جای تلاش برای هم‌ارتفاع کردن ستون‌ها، هر ستون رو کامل پر
+         می‌کنه و بعد می‌ره سراغ ستون بعدی - دقیقا شبیه چیدمان روزنامه‌ای واقعی. */
+      column-fill: auto;
     }}
     .container > * {{
       break-inside: avoid; -webkit-column-break-inside: avoid;
