@@ -377,7 +377,17 @@ def _usd_cad_rate_note(resampled_currencies, usd_toman_resampled=None, cad_toman
     return note_html, (usd_overlay + cad_overlay + usdcad_overlay)
 
 
-def _currency_section(toman_rates, resampled_currencies):
+def _currency_section(toman_rates, resampled_currencies, currency_toman_resampled=None):
+    """
+    اصلاح باگ مهم (درخواست کاربر): قبلا نمودار هر ارز (یورو، پوند، ین، ...) بر اساس نرخ خام
+    برابری با دلار کانادا (X/CAD رسمی بانک مرکزی) رسم می‌شد، نه بر اساس قیمت تومانی که خود
+    ردیف نشون می‌ده - یعنی عدد ردیف تومان بود ولی نمودارش چیز دیگه‌ای (نه‌تومان) نشون می‌داد.
+    الان (وقتی fetch_rates.compute_x_toman_series موفق بشه) هم نمودار و هم درصد تغییرِ کنار
+    هر ردیف، هر دو از روی همون تاریخچه‌ی واقعی تومانی محاسبه می‌شن - سازگار با عددی که ردیف
+    نشون می‌ده. اگه محاسبه‌ش (به‌خاطر نبود تاریخچه‌ی دلار/تومان در این اجرا) ممکن نبود، مثل
+    قبل به نمودار خام نرخ CAD برمی‌گرده تا صفحه خراب/خالی نشه.
+    """
+    currency_toman_resampled = currency_toman_resampled or {}
     rows = ""
     overlays = ""
     names = {"EUR": ("یورو", "🇪🇺"), "GBP": ("پوند انگلیس", "🇬🇧"), "JPY": ("ین ژاپن", "🇯🇵"),
@@ -392,49 +402,118 @@ def _currency_section(toman_rates, resampled_currencies):
         if not toman_value or not daily:
             continue
         slug = _slug(pair_name)
-        prev = daily[-2][1] if len(daily) > 1 else daily[-1][1]
-        latest = daily[-1][1]
-        change_pct = ((latest - prev) / prev * 100) if prev else 0
         title, flag = names.get(code, (code, "💱"))
+
+        toman_resampled = currency_toman_resampled.get(pair_name, {})
+        toman_daily = toman_resampled.get("daily", [])
+
+        if toman_daily:
+            prev = toman_daily[-2][1] if len(toman_daily) > 1 else toman_daily[-1][1]
+            latest = toman_daily[-1][1]
+            change_pct = ((latest - prev) / prev * 100) if prev else 0
+            note = (
+                f"تاریخچه‌ی واقعی {title}/تومان - از تقسیم نرخ رسمی {code}/CAD بر USD/CAD "
+                "(هر دو بانک مرکزی کانادا) و ضرب در نرخ واقعی دلار/تومان بازار آزاد ایران محاسبه شده."
+            )
+            daily_chart = _line_chart(toman_daily, f"{code}/Toman - Daily")
+            monthly_chart = _line_chart(toman_resampled.get("monthly", []), f"{code}/Toman - Monthly")
+            yearly_chart = _line_chart(toman_resampled.get("yearly", []), f"{code}/Toman - Yearly")
+        else:
+            prev = daily[-2][1] if len(daily) > 1 else daily[-1][1]
+            latest = daily[-1][1]
+            change_pct = ((latest - prev) / prev * 100) if prev else 0
+            note = (
+                "تاریخچه‌ی واقعی تومانی این‌بار در دسترس نبود؛ این نمودار موقتا بر اساس نرخ "
+                f"رسمی {code}/CAD (بانک مرکزی کانادا) رسم شده."
+            )
+            daily_chart = _line_chart(daily, f"{pair_name} - Daily")
+            monthly_chart = _line_chart(resampled.get("monthly", []), f"{pair_name} - Monthly")
+            yearly_chart = _line_chart(resampled.get("yearly", []), f"{pair_name} - Yearly")
 
         rows += _info_row(flag, title, code, f'{to_persian_digits(f"{toman_value:,.0f}")} <span class="row-unit">تومان</span>',
                            change_pct=change_pct, href=f"#chart-{slug}")
         overlays += _chart_overlay(
-            slug, f"{title} ({code})",
-            "نمودار بر اساس نرخ رسمی CAD رسم شده (تاریخچه تومانی در دسترس نیست)",
-            _line_chart(resampled.get("daily", []), f"{pair_name} - Daily"),
-            _line_chart(resampled.get("monthly", []), f"{pair_name} - Monthly"),
-            _line_chart(resampled.get("yearly", []), f"{pair_name} - Yearly"),
+            slug, f"{title} ({code})", note, daily_chart, monthly_chart, yearly_chart,
         )
     return rows, overlays
 
 
-def _gold_coin_section(gold_coin_prices):
+def _gold_coin_section(gold_coin_prices, gold_coin_resampled=None):
+    """
+    اصلاح باگ مهم (درخواست کاربر): قبلا کلیک روی هر ردیف طلا/سکه کاربر رو به نمودار سایت
+    خارجی tgju.org می‌فرستاد، با این توضیح که «این شاخص‌ها تاریخچه‌ی رایگان ندارن». این فرض
+    غلط بود - دقیقا همون endpointـی که قیمت لحظه‌ای رو می‌ده (fetch_rates.get_gold_coin_prices)
+    یک جدول تاریخچه‌ی کامل هم برمی‌گردونه (رجوع کن به fetch_rates.get_gold_coin_series و
+    توضیح این باگ در fetch_rates._get_tgju_history_series). الان اگه این تاریخچه در دسترس
+    باشه، مثل ارزها یک اورلی نموداری (روزانه/ماهانه/سالانه) داخل خودِ صفحه باز می‌شه؛ اگه
+    این‌بار در دسترس نبود (خطای شبکه/API غیررسمی)، مثل قبل به لینک خارجی برمی‌گرده.
+    """
     if not gold_coin_prices:
-        return ""
+        return "", ""
+    gold_coin_resampled = gold_coin_resampled or {}
     # قیمت طلای ۱۸ و ۲۴ عیار (و طلای دست‌دوم که از رویش تخمین زده می‌شه) تو tgju.org
     # همیشه قیمت «هر یک گرم» طلاست، نه یک واحد دیگه مثل مثقال - ولی قبلا این واحد رو
     # کنار عددش ننوشته بودیم و کاربر دقیقا همینو گفت: عدد هست ولی معلوم نیست مال چه
     # مقداری از طلاست. برای سکه‌ها (که فی‌نفسه یک قطعه‌ان، نه وزن خام طلا) این برچسب
     # معنی نداره، برای همین فقط رو اسلاگ‌های «geram*» اضافه می‌شه.
     GRAM_SLUGS = ("geram18", "geram24")
+    # نکته مهم (اصلاح باگ): matplotlib بدون یک کتابخونه‌ی شکل‌دهی حروف عربی/فارسی
+    # (arabic-reshaper/python-bidi که این پروژه نصب نداره) متن فارسی رو تو تیتر نمودار
+    # به‌هم‌ریخته و نامفهوم نشون می‌ده (حروف جدا و برعکس). برای همین - دقیقا مثل ارزها که
+    # همیشه از کد لاتین (USD/CAD, EUR/Toman) به‌جای اسم فارسی استفاده می‌کنن - این‌جا هم
+    # برای تیتر خودِ *نمودار* (نه ردیف/عنوان اورلی که همون‌جا با فونت درست صفحه نمایش داده
+    # می‌شه) یک برچسب لاتین جایگزین می‌شه.
+    GOLD_CHART_LABELS = {
+        "geram18": "Gold 18k (per gram)",
+        "geram24": "Gold 24k (per gram)",
+        "sekee": "Emami Coin",
+        "sekeb": "Bahar Azadi Coin",
+        "nim": "Half Coin",
+        "rob": "Quarter Coin",
+        "gerami": "Gerami Coin",
+    }
     rows = ""
-    for title, info in gold_coin_prices.items():
+    overlays = ""
+    for i, (title, info) in enumerate(gold_coin_prices.items()):
         price_str = to_persian_digits(f"{info['price']:,.0f}")
-        chart_url = config.TGJU_CHART_URL_TMPL.format(slug=info.get("slug", ""))
         label = title + (' <span class="row-code">تقریبی</span>' if info.get("approx") else "")
         if info.get("slug") in GRAM_SLUGS:
             label += ' <span class="row-code">هر گرم</span>'
-        rows += _info_row("🥇", label, "", f'{price_str} <span class="row-unit">تومان</span>',
-                           href=chart_url, external=True)
-    return f"""
+
+        resampled = gold_coin_resampled.get(title, {})
+        daily = resampled.get("daily", [])
+        if daily:
+            # نکته مهم (اصلاح باگ): _slug() فقط حروف/رقم انگلیسی نگه می‌داره، پس رو یک
+            # عنوان کاملا فارسی مثل «طلای ۱۸ عیار» رشته‌ی خالی برمی‌گردوند - یعنی همه‌ی
+            # ردیف‌های طلا/سکه به یک id="chart-" یکسان (خالی) لینک می‌شدن. به‌جاش از
+            # info["slug"] (اسلاگ لاتین خود tgju، مثل geram18/sekee) استفاده می‌شه که
+            # یکتاست؛ فقط «طلای دست دوم» چون از رو همون اسلاگ geram18 تخمین زده می‌شه
+            # باید با پسوند -approx از خود geram18 متمایز بشه تا id تکراری نشه.
+            base_slug = info.get("slug") or f"gold{i}"
+            slug = base_slug + ("-approx" if info.get("approx") else "")
+            rows += _info_row("🥇", label, "", f'{price_str} <span class="row-unit">تومان</span>',
+                               href=f"#chart-{slug}")
+            chart_label = GOLD_CHART_LABELS.get(base_slug, base_slug)
+            overlays += _chart_overlay(
+                slug, title, "تاریخچه‌ی واقعی قیمت (تومان) از جدول تاریخچه‌ی خود tgju.org.",
+                _line_chart(daily, f"{chart_label} - Daily"),
+                _line_chart(resampled.get("monthly", []), f"{chart_label} - Monthly"),
+                _line_chart(resampled.get("yearly", []), f"{chart_label} - Yearly"),
+            )
+        else:
+            # جایگزین امن وقتی این‌بار تاریخچه در دسترس نبود - رفتار قبلی (لینک خارجی)
+            chart_url = config.TGJU_CHART_URL_TMPL.format(slug=info.get("slug", ""))
+            rows += _info_row("🥇", label, "", f'{price_str} <span class="row-unit">تومان</span>',
+                               href=chart_url, external=True)
+
+    section_html = f"""
     <section class="card" style="border-top-color:#c9971f;">
       <h2 style="color:#c9971f;">🥇 طلا و سکه (بازار ایران)</h2>
       {rows}
-      <p class="card-note">داده لحظه‌ای از tgju.org. چون این شاخص‌ها تاریخچه رایگان ندارن، با کلیک
-      روی هرکدوم به نمودار واقعی خود سایت می‌ری.</p>
+      <p class="card-note">داده لحظه‌ای و تاریخچه از tgju.org.</p>
     </section>
     """
+    return section_html, overlays
 
 
 def _crypto_cell(c):
@@ -585,7 +664,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
                   gold_coin_prices=None, crypto_market=None, crypto_text: str = "",
                   stock_movers=None, weather_data=None, rollups: dict = None, output_dir: str = None,
                   usd_change_percent=None, stocks_text: str = "",
-                  iran_usd_toman_series=None) -> str:
+                  iran_usd_toman_series=None, gold_coin_series=None) -> str:
     output_dir = output_dir or config.OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
     rollups = rollups or {}
@@ -611,11 +690,23 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     usd_toman_resampled = _fr.resample_by_period(iran_usd_toman_series)
     cad_toman_resampled = _fr.resample_by_period(cad_toman_series)
 
+    # همون تاریخچه‌ی واقعی تومانی، حالا برای بقیه‌ی ارزها (یورو، پوند، ین، ...) هم تکرار
+    # می‌شه - رجوع کن به توضیح باگ در fetch_rates.compute_x_toman_series: قبلا نمودار هر
+    # ارز از روی نرخ خام X/CAD رسم می‌شد (نه تومان)، در حالی که خود ردیف عدد تومانی نشون می‌داد.
+    currency_toman_resampled = {}
+    usd_cad_raw = currencies.get("USD/CAD", [])
+    for pair_name, raw_series in currencies.items():
+        if pair_name == "USD/CAD":
+            continue
+        toman_series = _fr.compute_x_toman_series(raw_series, usd_cad_raw, iran_usd_toman_series)
+        if toman_series:
+            currency_toman_resampled[pair_name] = _fr.resample_by_period(toman_series)
+
     hero_html = _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=usd_change_percent)
     usd_cad_note_html, usd_cad_overlay_html = _usd_cad_rate_note(
         resampled_currencies, usd_toman_resampled, cad_toman_resampled
     )
-    currency_rows, currency_overlays = _currency_section(toman_rates, resampled_currencies)
+    currency_rows, currency_overlays = _currency_section(toman_rates, resampled_currencies, currency_toman_resampled)
     currency_overlays = usd_cad_overlay_html + currency_overlays
     currency_section_html = f"""
     <section class="card" style="border-top-color:#1f3864;">
@@ -624,7 +715,10 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     </section>
     """ if currency_rows else ""
 
-    gold_html = _gold_coin_section(gold_coin_prices or {})
+    gold_coin_resampled = {
+        title: _fr.resample_by_period(series) for title, series in (gold_coin_series or {}).items()
+    }
+    gold_html, gold_overlays_html = _gold_coin_section(gold_coin_prices or {}, gold_coin_resampled)
     crypto_html = _crypto_section(crypto_market or [], crypto_text)
     stocks_html = _stocks_section(stock_movers or [], stocks_text=stocks_text)
     market_tip_html = _market_education_tip()
@@ -984,6 +1078,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   {currency_section_html}
   {currency_overlays}
   {gold_html}
+  {gold_overlays_html}
   {market_tip_html}
   {rollup_html}
   <div class="note-card amber"><div class="note-label">📈 <strong>پیش‌بینی اقتصادی</strong></div>{_md(forecast_text)}</div>

@@ -117,6 +117,7 @@ def main():
     iran_usd_toman_series = fetch_rates.get_iran_usd_toman_series()
     usd_change_percent = fetch_rates.get_iran_usd_toman_change_percent()
     gold_coin_prices = fetch_rates.get_gold_coin_prices()
+    gold_coin_series = fetch_rates.get_gold_coin_series()
     stock_movers = fetch_stocks.get_stock_movers()
     weather_data = fetch_weather.get_all_weather()
     crypto_market = fetch_crypto.get_crypto_market()
@@ -151,6 +152,7 @@ def main():
         crypto_market=crypto_market, crypto_text=crypto_text, stock_movers=stock_movers,
         weather_data=weather_data, rollups=rollups, usd_change_percent=usd_change_percent,
         stocks_text=stocks_text, iran_usd_toman_series=iran_usd_toman_series,
+        gold_coin_series=gold_coin_series,
     )
     log.info(f"گزارش ساخته شد: {report_path}")
 

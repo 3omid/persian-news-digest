@@ -311,31 +311,31 @@ def get_iran_usd_toman_change_percent():
         return None
 
 
-def get_iran_usd_toman_series():
+def _get_tgju_history_series(url):
     """
-    برخلاف get_iran_usd_toman (که فقط آخرین قیمت رو می‌ده)، این تابع کل تاریخچه‌ی روزانه‌ی
-    نرخ دلار بازار آزاد تهران رو برمی‌گردونه: [(تاریخ "YYYY-MM-DD", قیمت به تومان), ...]
-    به ترتیب صعودی (قدیم -> جدید).
+    کمکی مشترک: تاریخچه‌ی روزانه‌ی کامل یک شاخص tgju.org (چه دلار بازار آزاد، چه طلا/سکه)
+    رو از روی جدول تاریخچه‌ی خودِ همون endpoint می‌خونه (نه یک API جدا).
 
-    چرا این لازم شد: قبلا نمودار «دلار آمریکا» و «دلار کانادا» توی گزارش هر دو مستقیم از
-    روی همون یک سری نرخ رسمی USD/CAD (بانک مرکزی کانادا) رسم می‌شدن - یعنی دقیقا یک نمودار
-    با دو عنوان مختلف (کاربر درست متوجه شد که «انگار نمودار کپی شده»). دلیلش این فرض غلط بود
-    که «تاریخچه‌ی رایگان نرخ تومانی در دسترس نیست» - ولی همون endpoint که get_iran_usd_toman
-    ازش قیمت لحظه‌ای می‌گیره (IRAN_USD_TOMAN_URL)، در واقع یک جدول تاریخچه‌ی کامل (چند صد تا
-    چند هزار روز) برمی‌گردونه، نه فقط یک عدد؛ فقط قبلا فقط ردیف اول (جدیدترین روز) ازش
-    خونده می‌شد. این تابع همه‌ی ردیف‌ها رو می‌خونه تا نمودار «دلار آمریکا» بتونه از روی
-    تاریخچه‌ی واقعی و مستقیم نرخ تومانی رسم بشه (نه یک نمودار جایگزین/کپی).
+    چرا این لازم شد: قبلا هم برای نرخ دلار (نمودار «دلار آمریکا»/«دلار کانادا») و هم برای
+    طلا/سکه فرض شده بود که «این endpoint فقط قیمت لحظه‌ای می‌ده، نه تاریخچه» - برای دلار
+    باعث می‌شد نمودار «دلار آمریکا» و «دلار کانادا» هر دو کپی از یک نمودار دیگه (نرخ رسمی
+    USD/CAD) باشن، و برای طلا/سکه باعث می‌شد دکمه‌ی «نمودار» به‌جای نمودار داخل خود گزارش،
+    کاربر رو به سایت tgju.org می‌فرستاد. ولی این endpoint (summary-table-data) در واقع
+    برای هر دو، یک جدول تاریخچه‌ی کامل (چند صد تا چند هزار روز) برمی‌گردونه؛ فقط قبلا فقط
+    ردیف اول (جدیدترین روز) ازش خونده می‌شد. این تابع همه‌ی ردیف‌ها رو می‌خونه.
+
+    خروجی: [(تاریخ "YYYY-MM-DD", قیمت به تومان), ...] به ترتیب صعودی (قدیم -> جدید).
     """
     try:
         # length/start تلاشیه برای گرفتن بیشترین تاریخچه‌ی ممکن از این API غیررسمی
         # (که مستندات رسمی نداره)؛ اگه سرور این پارامترها رو نادیده بگیره، همون رفتار
         # پیش‌فرضش (چند صد روز اخیر) هم برای نمودار روزانه/ماهانه کاملا کافیه.
-        resp = requests.get(config.IRAN_USD_TOMAN_URL, params={"length": 5000, "start": 0}, timeout=20)
+        resp = requests.get(url, params={"length": 5000, "start": 0}, timeout=20)
         resp.raise_for_status()
         data = resp.json()
         rows = data.get("data") if isinstance(data, dict) else None
         if not isinstance(rows, list):
-            log.warning("ساختار پاسخ تاریخچه‌ی دلار بازار آزاد ایران قابل شناسایی نبود.")
+            log.warning(f"ساختار پاسخ تاریخچه‌ی {url} قابل شناسایی نبود.")
             return []
 
         by_date = {}
@@ -358,8 +358,36 @@ def get_iran_usd_toman_series():
 
         return sorted(by_date.items())
     except Exception as e:
-        log.error(f"خطا در دریافت تاریخچه‌ی نرخ دلار بازار آزاد ایران: {e}")
+        log.error(f"خطا در دریافت تاریخچه‌ی {url}: {e}")
         return []
+
+
+def get_iran_usd_toman_series():
+    """
+    برخلاف get_iran_usd_toman (که فقط آخرین قیمت رو می‌ده)، کل تاریخچه‌ی روزانه‌ی نرخ دلار
+    بازار آزاد تهران رو برمی‌گردونه. رجوع کن به توضیح کامل این باگ در _get_tgju_history_series.
+    """
+    return _get_tgju_history_series(config.IRAN_USD_TOMAN_URL)
+
+
+def get_gold_coin_series():
+    """
+    تاریخچه‌ی روزانه‌ی هر شاخص طلا/سکه (config.GOLD_COIN_INDICATORS) رو برمی‌گردونه:
+    dict {عنوان فارسی: [(تاریخ, قیمت به تومان), ...]} - برای این‌که دکمه‌ی «نمودار» تو گزارش
+    بتونه یک نمودار واقعی داخل خودِ صفحه نشون بده (به‌جای لینک به سایت خارجی tgju.org).
+    رجوع کن به توضیح کامل این باگ در _get_tgju_history_series.
+    """
+    result = {}
+    for title, slug in config.GOLD_COIN_INDICATORS.items():
+        url = config.TGJU_INDICATOR_URL_TMPL.format(slug=slug)
+        series = _get_tgju_history_series(url)
+        if series:
+            result[title] = series
+    # طلای دست دوم شاخص رسمی نداره - همون تخمین ۹۹٪ نرخ ۱۸ عیار (مثل get_gold_coin_prices)
+    # ولی این‌بار برای کل تاریخچه، نه فقط قیمت لحظه‌ای، تا نمودارش هم داشته باشه.
+    if "طلای ۱۸ عیار" in result:
+        result["طلای دست دوم (تقریبی)"] = [(d, v * 0.99) for d, v in result["طلای ۱۸ عیار"]]
+    return result
 
 
 def compute_cad_toman_series(usd_toman_series, usd_cad_series):
@@ -386,6 +414,38 @@ def compute_cad_toman_series(usd_toman_series, usd_cad_series):
         cad_rate = cad_values[idx]
         if cad_rate:
             result.append((date_str, usd_toman_val / cad_rate))
+    return result
+
+
+def compute_x_toman_series(x_cad_series, usd_cad_series, usd_toman_series):
+    """
+    همون منطق compute_cad_toman_series ولی برای بقیه‌ی ارزها (یورو، پوند، ین، ...): چون
+    بازار آزاد ایران فقط نرخ دلار/تومان منتشر می‌کنه، تاریخچه‌ی «ارز X به تومان» با ترکیب
+    سه‌تا داده‌ی واقعی محاسبه می‌شه، نه با نمایش نمودار نرخ رسمی X/CAD (که قبلا کاربر دقیقا
+    همین رو برای دلار/کانادا اشتباه می‌دید و درخواست کرد برای همه‌ی ارزها درست بشه):
+
+        Toman_X(تاریخ) = X/CAD(تاریخ) ÷ USD/CAD(تاریخ) × USD/Toman(نزدیک‌ترین روز قبل)
+
+    X/CAD و USD/CAD هر دو از بانک مرکزی کاناداست و روی روزهای کاریِ یکسان منتشر می‌شن (پس
+    تطبیق مستقیم تاریخ به تاریخ کار می‌کنه)؛ USD/Toman از بازار آزاد ایرانه که هرروزه‌ست،
+    برای همین نزدیک‌ترین روز قبل ازش استفاده می‌شه (مثل compute_cad_toman_series).
+    """
+    if not x_cad_series or not usd_cad_series or not usd_toman_series:
+        return []
+    usd_cad_map = dict(usd_cad_series)
+    toman_dates = [d for d, _ in usd_toman_series]
+    toman_values = [v for _, v in usd_toman_series]
+
+    result = []
+    for date_str, x_cad_val in x_cad_series:
+        usd_cad_val = usd_cad_map.get(date_str)
+        if not usd_cad_val:
+            continue
+        idx = bisect.bisect_right(toman_dates, date_str) - 1
+        if idx < 0:
+            continue
+        usd_toman_val = toman_values[idx]
+        result.append((date_str, x_cad_val / usd_cad_val * usd_toman_val))
     return result
 
 
