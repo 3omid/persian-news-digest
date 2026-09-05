@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """تبدیل تاریخ میلادی به شمسی - بدون نیاز به کتابخونه خارجی (خودکفا)."""
 
+from zoneinfo import ZoneInfo
+
+TEHRAN_TZ = ZoneInfo("Asia/Tehran")
+TORONTO_TZ = ZoneInfo("America/Toronto")
+
 PERSIAN_MONTHS = [
     "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
     "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
@@ -45,13 +50,22 @@ def gregorian_to_jalali(gy, gm, gd):
 
 def format_dual_date(dt) -> str:
     """
-    ورودی: datetime.datetime
-    خروجی: رشته‌ای شامل تاریخ شمسی و میلادی، مثل: «۱۳ شهریور ۱۴۰۵ | 2026-09-04»
+    ورودی: datetime.datetime (ترجیحا timezone-aware - اگه naive باشه فقط تاریخ برمی‌گرده،
+    بدون ساعت، چون نمی‌شه مطمئن بود این زمان مال کدوم منطقه زمانیه).
+    خروجی: تاریخ شمسی + میلادی + ساعت محلی تهران و تورنتو، مثل:
+    «۱۳ شهریور ۱۴۰۵ | 2026-09-04 · تهران ۱۴:۳۰ · تورنتو ۰۷:۰۰»
+    قبلا فقط تاریخ (بدون ساعت) نشون داده می‌شد و هیچ ساعتی برای کانادا نبود -
+    این تابع الان همون‌جوری که بخش آب‌وهوا هر دو شهر رو نشون می‌ده، این‌جا هم نشون می‌ده.
     """
     jy, jm, jd = gregorian_to_jalali(dt.year, dt.month, dt.day)
     jd_str = f"{jd} {PERSIAN_MONTHS[jm - 1]} {jy}".translate(PERSIAN_DIGITS)
     g_str = dt.strftime("%Y-%m-%d")
-    return f"{jd_str} | {g_str}"
+    time_str = ""
+    if dt.tzinfo is not None:
+        tehran_time = to_persian_digits(dt.astimezone(TEHRAN_TZ).strftime("%H:%M"))
+        toronto_time = to_persian_digits(dt.astimezone(TORONTO_TZ).strftime("%H:%M"))
+        time_str = f" · تهران {tehran_time} · تورنتو {toronto_time}"
+    return f"{jd_str} | {g_str}{time_str}"
 
 
 if __name__ == "__main__":
