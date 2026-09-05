@@ -254,7 +254,8 @@ def _currency_section(toman_rates, resampled_currencies):
     rows = ""
     overlays = ""
     names = {"EUR": ("یورو", "🇪🇺"), "GBP": ("پوند انگلیس", "🇬🇧"), "JPY": ("ین ژاپن", "🇯🇵"),
-             "CNY": ("یوان چین", "🇨🇳"), "TRY": ("لیر ترکیه", "🇹🇷")}
+             "CNY": ("یوان چین", "🇨🇳"), "TRY": ("لیر ترکیه", "🇹🇷"), "AUD": ("دلار استرالیا", "🇦🇺"),
+             "CHF": ("فرانک سوئیس", "🇨🇭"), "INR": ("روپیه هند", "🇮🇳"), "AED": ("درهم امارات", "🇦🇪")}
     for pair_name, resampled in resampled_currencies.items():
         if pair_name == "USD/CAD":
             continue
