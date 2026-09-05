@@ -251,22 +251,22 @@ def _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=None)
     # نکته مهم (اصلاح باگ): قبلا هر دو کارت دلار آمریکا و دلار کانادا به یک اورلی
     # مشترک (#chart-usdcad) لینک می‌شدن که تیترش «دلار آمریکا به دلار کانادا» بود -
     # این تیتر برای خود کارت دلار آمریکا (که موضوعش نرخ تومانیه، نه نرخ برابری با
-    # کانادا) و برای کارت دلار کانادا هم گمراه‌کننده بود. چون این پروژه اصلا تاریخچه‌ی
-    # روزانه‌ی «دلار آمریکا/کانادا به تومان» رو ذخیره نمی‌کنه (فقط یک عدد لحظه‌ای از
-    # tgju می‌گیره، نه یک سری زمانی)، نمی‌شه یک نمودار داخلی درست براشون ساخت - برای
-    # همین دقیقا مثل بخش طلا/سکه، این دو کارت به نمودار واقعی و مخصوص خودشون رو
-    # خود سایت tgju.org لینک می‌شن (هرکدوم صفحه‌ی جداگانه‌ی خودشون، با تیتر درست).
-    usd_chart_url = config.TGJU_CHART_URL_TMPL.format(slug="price_dollar_rl")
-    cad_chart_url = config.TGJU_CHART_URL_TMPL.format(slug="price_cad")
-
+    # کانادا) و برای کارت دلار کانادا هم گمراه‌کننده بود. کاربر می‌خواد این نمودار
+    # همینجا تو خود صفحه (نه لینک به سایت دیگه) با تب‌های روزانه/ماهانه/سالانه باز
+    # بشه - درست مثل بقیه ارزها - فقط با تیتر درست و مخصوص خودش. برای همین اینجا به
+    # دو اورلی داخلی جداگانه (#chart-usd و #chart-cad) لینک می‌شن که در _usd_cad_rate_note
+    # ساخته می‌شن؛ هر سه اورلی (usd/cad/usdcad) از روی همون داده‌ی رسمی USD/CAD
+    # (تنها سری تاریخی واقعی که این پروژه براش داره) رسم می‌شن، چون تاریخچه‌ی روزانه‌ی
+    # جداگانه‌ای برای نرخ تومانی دلار/کانادا وجود نداره - ولی هرکدوم تیتر و توضیح
+    # مخصوص به خودشونو دارن تا گمراه‌کننده نباشه.
     return f"""
     <div class="hero-pair">
-      <a class="hero-card" href="{usd_chart_url}" target="_blank" rel="noopener">
+      <a class="hero-card" href="#chart-usd">
         <div class="hero-label">💵 دلار آمریکا</div>
         <div class="hero-value">{to_persian_digits(f"{usd_toman:,.0f}")}</div>
         <div class="hero-unit">{usd_unit_line}</div>
       </a>
-      <a class="hero-card" href="{cad_chart_url}" target="_blank" rel="noopener">
+      <a class="hero-card" href="#chart-cad">
         <div class="hero-label">🍁 دلار کانادا</div>
         <div class="hero-value">{to_persian_digits(f"{cad_toman:,.0f}")}</div>
         <div class="hero-unit">تومان &nbsp; {'▲' if up else '▼'} {to_persian_digits(f"{abs(day_change):.2f}")}٪</div>
@@ -297,22 +297,39 @@ def _usd_cad_rate_note(resampled_currencies):
     up = change_pct >= 0
     cls = "up" if up else "down"
     arrow = "▲" if up else "▼"
-    slug = "usdcad"
 
     note_html = f"""
-    <a class="rate-note" href="#chart-{slug}">
+    <a class="rate-note" href="#chart-usdcad">
       <span>💱 نرخ دلار آمریکا به کانادا: <bdi dir="ltr">۱ USD = {to_persian_digits(f"{latest:.3f}")} CAD</bdi></span>
       <span class="row-change {cls}" style="margin-top:0;">{arrow} {to_persian_digits(f"{abs(change_pct):.2f}")}٪</span>
     </a>
     """
-    overlay_html = _chart_overlay(
-        slug, "دلار آمریکا به دلار کانادا (USD/CAD)",
-        "نرخ رسمی بانک مرکزی کانادا - نشون می‌ده هر ۱ دلار آمریکا معادل چند دلار کاناداست",
-        _line_chart(daily, "USD/CAD - Daily"),
-        _line_chart(usd_cad.get("monthly", []), "USD/CAD - Monthly"),
-        _line_chart(usd_cad.get("yearly", []), "USD/CAD - Yearly"),
+
+    # نمودارها فقط یک‌بار ساخته می‌شن و بین هر سه اورلی (usd/cad/usdcad) به اشتراک
+    # گذاشته می‌شن - چون تنها سری تاریخی واقعی که این پروژه در اختیار داره همین
+    # نرخ رسمی USD/CAD (بانک مرکزی کانادا) هست؛ تاریخچه‌ی جداگانه‌ای برای نرخ
+    # تومانی دلار آمریکا یا دلار کانادا وجود نداره. برای همین هرکدوم با تیتر و
+    # توضیح مخصوص به خودشون نمایش داده می‌شن تا کاربر گمراه نشه که این عدد دقیقا
+    # مال کدوم موضوعه.
+    daily_b64 = _line_chart(daily, "USD/CAD - Daily")
+    monthly_b64 = _line_chart(usd_cad.get("monthly", []), "USD/CAD - Monthly")
+    yearly_b64 = _line_chart(usd_cad.get("yearly", []), "USD/CAD - Yearly")
+
+    shared_note = (
+        "چون تاریخچه‌ی روزانه‌ی نرخ تومانی این ارز به‌صورت رایگان در دسترس نیست، "
+        "این نمودار بر اساس نرخ رسمی برابری دلار آمریکا/کانادا (بانک مرکزی کانادا) رسم شده."
     )
-    return note_html, overlay_html
+
+    overlays_html = (
+        _chart_overlay("usd", "دلار آمریکا (USD)", shared_note, daily_b64, monthly_b64, yearly_b64)
+        + _chart_overlay("cad", "دلار کانادا (CAD)", shared_note, daily_b64, monthly_b64, yearly_b64)
+        + _chart_overlay(
+            "usdcad", "دلار آمریکا به دلار کانادا (USD/CAD)",
+            "نرخ رسمی بانک مرکزی کانادا - نشون می‌ده هر ۱ دلار آمریکا معادل چند دلار کاناداست",
+            daily_b64, monthly_b64, yearly_b64,
+        )
+    )
+    return note_html, overlays_html
 
 
 def _currency_section(toman_rates, resampled_currencies):
