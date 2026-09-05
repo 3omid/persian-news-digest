@@ -248,24 +248,29 @@ def _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=None)
     else:
         usd_unit_line = "تومان"
 
-    # کارت‌ها به نمودار نرخ USD/CAD لینک می‌شن (طبق درخواست کاربر که این دوتا کارت
-    # برخلاف ردیف‌های ارزهای دیگه، قابل کلیک نبودن و آماری نشون نمی‌دادن).
-    has_usdcad_chart = bool(resampled_currencies.get("USD/CAD", {}).get("daily"))
-    href_attr = ' href="#chart-usdcad"' if has_usdcad_chart else ""
-    tag = "a" if has_usdcad_chart else "div"
+    # نکته مهم (اصلاح باگ): قبلا هر دو کارت دلار آمریکا و دلار کانادا به یک اورلی
+    # مشترک (#chart-usdcad) لینک می‌شدن که تیترش «دلار آمریکا به دلار کانادا» بود -
+    # این تیتر برای خود کارت دلار آمریکا (که موضوعش نرخ تومانیه، نه نرخ برابری با
+    # کانادا) و برای کارت دلار کانادا هم گمراه‌کننده بود. چون این پروژه اصلا تاریخچه‌ی
+    # روزانه‌ی «دلار آمریکا/کانادا به تومان» رو ذخیره نمی‌کنه (فقط یک عدد لحظه‌ای از
+    # tgju می‌گیره، نه یک سری زمانی)، نمی‌شه یک نمودار داخلی درست براشون ساخت - برای
+    # همین دقیقا مثل بخش طلا/سکه، این دو کارت به نمودار واقعی و مخصوص خودشون رو
+    # خود سایت tgju.org لینک می‌شن (هرکدوم صفحه‌ی جداگانه‌ی خودشون، با تیتر درست).
+    usd_chart_url = config.TGJU_CHART_URL_TMPL.format(slug="price_dollar_rl")
+    cad_chart_url = config.TGJU_CHART_URL_TMPL.format(slug="price_cad")
 
     return f"""
     <div class="hero-pair">
-      <{tag} class="hero-card"{href_attr}>
+      <a class="hero-card" href="{usd_chart_url}" target="_blank" rel="noopener">
         <div class="hero-label">💵 دلار آمریکا</div>
         <div class="hero-value">{to_persian_digits(f"{usd_toman:,.0f}")}</div>
         <div class="hero-unit">{usd_unit_line}</div>
-      </{tag}>
-      <{tag} class="hero-card"{href_attr}>
+      </a>
+      <a class="hero-card" href="{cad_chart_url}" target="_blank" rel="noopener">
         <div class="hero-label">🍁 دلار کانادا</div>
         <div class="hero-value">{to_persian_digits(f"{cad_toman:,.0f}")}</div>
         <div class="hero-unit">تومان &nbsp; {'▲' if up else '▼'} {to_persian_digits(f"{abs(day_change):.2f}")}٪</div>
-      </{tag}>
+      </a>
     </div>
     """
 
