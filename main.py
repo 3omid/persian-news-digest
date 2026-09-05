@@ -51,6 +51,26 @@ def maybe_periodic_rollups():
     return rollups
 
 
+def _smart_truncate(text: str, limit: int) -> str:
+    """
+    برش متن در مرز جمله یا حداقل مرز کلمه، نه وسط کلمه/جمله - چون خلاصه‌ی کوتاهی که
+    برای تلگرام می‌فرستیم قبلا با text[:150] بریده می‌شد و همیشه وسط یه کلمه/جمله
+    قطع می‌شد (ناقص و بی‌معنی به‌نظر می‌رسید). اینجا سعی می‌کنیم تا نزدیک‌ترین
+    نقطه/علامت سوال/تعجب قبل از حد مجاز ببریم؛ اگه پیدا نشد، حداقل سر یه کلمه کامل.
+    """
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    last_sentence_end = max(cut.rfind("."), cut.rfind("؟"), cut.rfind("!"))
+    if last_sentence_end >= int(limit * 0.4):
+        return cut[: last_sentence_end + 1]
+    last_space = cut.rfind(" ")
+    if last_space >= int(limit * 0.4):
+        cut = cut[:last_space]
+    return cut.rstrip() + " …"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--category", default=None, help="فقط این دسته رو پردازش کن (اختیاری)")
@@ -112,9 +132,16 @@ def main():
     )
     log.info(f"گزارش ساخته شد: {report_path}")
 
-    short_summary = "📰 خلاصه اخبار:\n\n" + "\n".join(
-        f"- {cat}: {a.get('summary', '')[:150]}" for cat, a in category_analyses.items() if a.get("items")
-    )
+    lines = []
+    for cat, a in category_analyses.items():
+        if not a.get("items"):
+            continue
+        summary = a.get("summary", "")
+        if summary.startswith("خطا در تحلیل خودکار"):
+            lines.append(f"- {cat}: ⚠️ خلاصه این بخش به‌دلیل خطای موقت آماده نشد (اخبار کامل در فایل پیوست هست).")
+        else:
+            lines.append(f"- {cat}: {_smart_truncate(summary, 280)}")
+    short_summary = "📰 خلاصه اخبار:\n\n" + "\n".join(lines)
     send_telegram.send_report(report_path, short_summary)
 
 
