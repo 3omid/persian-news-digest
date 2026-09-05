@@ -97,6 +97,7 @@ def main():
     log.info("دریافت نرخ ارز، طلا و کریپتو...")
     currencies = fetch_rates.get_all_currencies()
     iran_usd_toman = fetch_rates.get_iran_usd_toman()
+    usd_change_percent = fetch_rates.get_iran_usd_toman_change_percent()
     gold_coin_prices = fetch_rates.get_gold_coin_prices()
     stock_movers = fetch_stocks.get_stock_movers()
     weather_data = fetch_weather.get_all_weather()
@@ -121,6 +122,7 @@ def main():
         if any(k in it["source"].lower() for k in ["coindesk", "cointelegraph"])
     ]
     crypto_text = analyze.crypto_analysis(crypto_market, crypto_news)
+    stocks_text = analyze.stock_market_analysis(stock_movers)
 
     rollups = maybe_periodic_rollups() if not args.category else {}
 
@@ -129,7 +131,8 @@ def main():
         category_analyses, currencies, iran_usd_toman, forecast_text, political_text,
         gold_coin_prices=gold_coin_prices,
         crypto_market=crypto_market, crypto_text=crypto_text, stock_movers=stock_movers,
-        weather_data=weather_data, rollups=rollups,
+        weather_data=weather_data, rollups=rollups, usd_change_percent=usd_change_percent,
+        stocks_text=stocks_text,
     )
     log.info(f"گزارش ساخته شد: {report_path}")
 
