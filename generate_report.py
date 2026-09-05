@@ -10,7 +10,7 @@ import html as html_lib
 import io
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 import matplotlib
 matplotlib.use("Agg")
@@ -458,7 +458,10 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
         temp_str = to_persian_digits(f"{temp:.0f}°") if temp is not None else ""
         weather_html += f'<span class="weather-chip">{w["icon"]} {w["name"]} {temp_str} · {to_persian_digits(w["time"])}</span>'
     user_name = config.USER_NAME
-    now_str = format_dual_date(datetime.now()) + " — " + to_persian_digits(datetime.now().strftime("%H:%M"))
+    # قبلا از datetime.now() بدون timezone استفاده می‌شد (روی رانر گیت‌هاب یعنی UTC خام)
+    # و فقط یه ساعت خام نشون می‌داد که نه ساعت ایران بود نه کانادا. الان format_dual_date
+    # خودش هر دو ساعت تهران و تورنتو رو از روی UTC واقعی حساب و نشون می‌ده.
+    now_str = format_dual_date(datetime.now(timezone.utc))
 
     html = f"""<!DOCTYPE html>
 <html lang="fa" dir="rtl">
