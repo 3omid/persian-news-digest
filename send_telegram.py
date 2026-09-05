@@ -18,9 +18,12 @@ def send_report(html_path: str, short_summary: str = ""):
 
     if short_summary:
         try:
+            # parse_mode=HTML تا <b>...</b> که تو main.py برای عنوان هر دسته ساخته می‌شه
+            # واقعا بولد نمایش داده بشه، نه به‌صورت تگ خام تو پیام.
             resp = requests.post(f"{base}/sendMessage", data={
                 "chat_id": config.TELEGRAM_CHAT_ID,
                 "text": short_summary[:4000],
+                "parse_mode": "HTML",
             }, timeout=20)
             if not resp.ok:
                 log.error(f"خطا در ارسال پیام متنی تلگرام: {resp.status_code} - {resp.text}")
