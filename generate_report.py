@@ -223,7 +223,7 @@ def _info_row(icon, title, code, value_text, change_pct=None, href=None, externa
     return f'<div class="row">{inner}</div>'
 
 
-def _toman_hero_pair(toman_rates, resampled_currencies):
+def _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=None):
     usd_toman = toman_rates.get("USD")
     cad_toman = toman_rates.get("CAD")
     if not usd_toman or not cad_toman:
@@ -234,12 +234,26 @@ def _toman_hero_pair(toman_rates, resampled_currencies):
         latest, prev = usd_cad_daily[-1][1], usd_cad_daily[-2][1]
         day_change = -((latest - prev) / prev * 100) if prev else 0
     up = day_change >= 0
+
+    # درصد تغییر دلار بازار آزاد ایران مستقیماً از tgju.org میاد (چون نرخ CAD/USD رسمی
+    # هیچ ربطی به نوسان روزانه‌ی دلار بازار آزاد تهران نداره - این دو عدد کاملاً جدا هستن).
+    # اگه این عدد در دسترس نبود (خطای شبکه/تغییر ساختار API)، به‌جای نمایش عدد اشتباه یا صفر،
+    # خط درصد تغییر کلاً از کارت دلار آمریکا حذف می‌شه.
+    if usd_change_percent is not None:
+        usd_up = usd_change_percent >= 0
+        usd_unit_line = (
+            f'تومان &nbsp; {"▲" if usd_up else "▼"} '
+            f'{to_persian_digits(f"{abs(usd_change_percent):.2f}")}٪'
+        )
+    else:
+        usd_unit_line = "تومان"
+
     return f"""
     <div class="hero-pair">
       <div class="hero-card">
         <div class="hero-label">💵 دلار آمریکا</div>
         <div class="hero-value">{to_persian_digits(f"{usd_toman:,.0f}")}</div>
-        <div class="hero-unit">تومان</div>
+        <div class="hero-unit">{usd_unit_line}</div>
       </div>
       <div class="hero-card">
         <div class="hero-label">🍁 دلار کانادا</div>
@@ -342,7 +356,7 @@ def _crypto_section(crypto_market, crypto_text):
     """
 
 
-def _stocks_section(stock_movers):
+def _stocks_section(stock_movers, stocks_text: str = ""):
     if not stock_movers:
         return ""
     rows = ""
@@ -356,8 +370,29 @@ def _stocks_section(stock_movers):
     <section class="card" style="border-top-color:#2874a6;">
       <h2 style="color:#2874a6;">🏢 برترین شرکت‌ها (آمریکا + کانادا)</h2>
       {rows}
-      <p class="card-note">مرتب‌شده بر اساس بیشترین رشد روزانه. توصیه سرمایه‌گذاری نیست.</p>
+      {f'<div class="card-note">{_md(stocks_text)}</div>' if stocks_text else ''}
+      <p class="card-note">مرتب‌شده بر اساس بیشترین رشد روزانه. هدف این بخش آشنایی با بازار سهامه، توصیه سرمایه‌گذاری نیست.</p>
     </section>
+    """
+
+
+def _market_education_tip():
+    """
+    یک نکته‌ی آموزشی چرخشی درباره‌ی مفاهیم پایه‌ی بازار فارکس/سهام از config.MARKET_EDUCATION_TIPS.
+    بر اساس «روز سال» (نه ساعت اجرا) انتخاب می‌شه تا اگه گزارش چندبار در یک روز ساخته بشه،
+    نکته‌ی نمایش‌داده‌شده عوض نشه - هدف اینه که در طول چند هفته، خواننده به‌ترتیب و بدون
+    تکرار زیاد، مفاهیم مختلف بازار رو یاد بگیره.
+    """
+    tips = getattr(config, "MARKET_EDUCATION_TIPS", [])
+    if not tips:
+        return ""
+    day_of_year = datetime.now(timezone.utc).timetuple().tm_yday
+    tip = tips[day_of_year % len(tips)]
+    return f"""
+    <div class="note-card teal">
+      <div class="note-label">🎓 <strong>نکته آموزشی امروز: {tip['title']}</strong></div>
+      <p style="margin:6px 0 0;">{tip['text']}</p>
+    </div>
     """
 
 
@@ -412,7 +447,8 @@ def _render_category_section(category, analysis):
 def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
                   forecast_text: str, political_text: str,
                   gold_coin_prices=None, crypto_market=None, crypto_text: str = "",
-                  stock_movers=None, weather_data=None, rollups: dict = None, output_dir: str = None) -> str:
+                  stock_movers=None, weather_data=None, rollups: dict = None, output_dir: str = None,
+                  usd_change_percent=None, stocks_text: str = "") -> str:
     output_dir = output_dir or config.OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
     rollups = rollups or {}
@@ -430,7 +466,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     resampled_currencies = {name: _fr.resample_by_period(series) for name, series in currencies.items()}
     toman_rates = _fr.compute_toman_rates(iran_usd_toman, resampled_currencies)
 
-    hero_html = _toman_hero_pair(toman_rates, resampled_currencies)
+    hero_html = _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=usd_change_percent)
     currency_rows, currency_overlays = _currency_section(toman_rates, resampled_currencies)
     currency_section_html = f"""
     <section class="card" style="border-top-color:#1f3864;">
@@ -441,7 +477,8 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
 
     gold_html = _gold_coin_section(gold_coin_prices or {})
     crypto_html = _crypto_section(crypto_market or [], crypto_text)
-    stocks_html = _stocks_section(stock_movers or [])
+    stocks_html = _stocks_section(stock_movers or [], stocks_text=stocks_text)
+    market_tip_html = _market_education_tip()
 
     rollup_html = "".join(
         f'<div class="note-card purple"><div class="note-label">📌 <strong>مهم‌ترین اخبار {label}</strong></div>{_md(text)}</div>'
@@ -593,6 +630,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .note-card.amber {{ background: #fdf6e3; border-color: #c48a2e; }}
   .note-card.blue {{ background: #eaf1f8; border-color: var(--navy); }}
   .note-card.purple {{ background: #f1ecf6; border-color: #6c4f8c; }}
+  .note-card.teal {{ background: #e6f5f2; border-color: #1e8a74; }}
   .note-label {{ font-size: 13.5px; margin-bottom: 6px; }}
 
   /* متن‌های تولیدشده توسط مدل (خلاصه، پیش‌بینی، تحلیل، گزارش کریپتو) - بعد از تبدیل مارک‌داون به HTML */
@@ -705,6 +743,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   {currency_section_html}
   {currency_overlays}
   {gold_html}
+  {market_tip_html}
   {rollup_html}
   <div class="note-card amber"><div class="note-label">📈 <strong>پیش‌بینی اقتصادی</strong></div>{_md(forecast_text)}</div>
   <div class="note-card blue"><div class="note-label">🏛️ <strong>تحلیل سیاسی</strong></div>{_md(political_text)}</div>
