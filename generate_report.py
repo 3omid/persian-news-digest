@@ -447,26 +447,48 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
         for label, text in rollups.items() if text
     )
 
-    category_blocks = [
-        _render_category_section(category, category_analyses.get(category, {"summary": "داده‌ای موجود نیست.", "items": [], "item_analyses": []}))
-        for category in config.RSS_SOURCES.keys()
-    ]
-
     # توزیع دستی کارت‌های بزرگ (کریپتو/شرکت‌ها/طلا/هر دسته خبری) بین چند ستون به روش
     # حریصانه (greedy): چون این کارت‌ها با break-inside:avoid تقسیم‌ناپذیرن و ارتفاع‌شون
     # خیلی متفاوته (طلا ~۵۰۰px در برابر یک کارت خبری ۱۰تایی ~۱۸۰۰px)، اعتماد به
-    # column-fill نیتیو مرورگر (چه balance چه auto) نتیجه‌ی قابل‌اعتمادی نمی‌ده. اینجا
-    # طول متن HTML هر بلاک به‌عنوان تخمین تقریبی ارتفاعش استفاده می‌شه (بلاک‌های بزرگ‌تر
-    # HTML بیشتری هم دارن) و هر بلاک همیشه به کوتاه‌ترین ستون فعلی اضافه می‌شه - نتیجه
-    # چند ستون تقریبا هم‌قد، بدون فاصله خالی غیرمنتظره.
-    big_blocks = [b for b in ([crypto_html, stocks_html, gold_html] + category_blocks) if b and b.strip()]
+    # column-fill نیتیو مرورگر (چه balance چه auto) نتیجه‌ی قابل‌اعتمادی نمی‌ده.
+    # نکته مهم: طول رشته‌ی HTML رندرشده معیار قابل‌اعتمادی برای تخمین ارتفاع نیست، چون
+    # تحلیل هر خبر (item_analysis) داخل یک <details> جمع‌شده (مخفی) قرار می‌گیره و طولش
+    # می‌تونه از ۵۰ تا ۲۰۰۰+ کاراکتر فرق کنه بدون اینکه کوچیک‌ترین تاثیری روی ارتفاع
+    # واقعی صفحه (وقتی بسته‌ست) داشته باشه - همین باعث می‌شد قبلا یه دسته با تحلیل‌های
+    # طولانی کل یه ستون رو به‌تنهایی اشغال کنه و بقیه‌ی ۹ بلاک تو ۲ ستون دیگه جمع بشن.
+    # به‌جاش از تعداد آیتم‌های واقعی (خبر/ارز/سکه/کریپتو) که مستقیم رو ارتفاع دیده‌شده
+    # تاثیر می‌ذاره برای تخمین استفاده می‌کنیم.
+    HEADER_OVERHEAD = 90
+    PER_NEWS_ITEM = 175
+    PER_ROW_ITEM = 46
+    CHART_OVERHEAD = 210
+
+    big_blocks = []  # لیست از (تخمین_ارتفاع, html)
+    for category in config.RSS_SOURCES.keys():
+        analysis = category_analyses.get(category, {"summary": "داده‌ای موجود نیست.", "items": [], "item_analyses": []})
+        html_piece = _render_category_section(category, analysis)
+        if html_piece and html_piece.strip():
+            est_height = HEADER_OVERHEAD + 130 + len(analysis.get("items", [])) * PER_NEWS_ITEM
+            big_blocks.append((est_height, html_piece))
+
+    if crypto_html and crypto_html.strip():
+        n_coins = len(crypto_market or [])
+        est_height = HEADER_OVERHEAD + CHART_OVERHEAD + -(-n_coins // 2) * 62  # گرید دوستونه
+        big_blocks.append((est_height, crypto_html))
+    if stocks_html and stocks_html.strip():
+        est_height = HEADER_OVERHEAD + len(stock_movers or []) * PER_ROW_ITEM
+        big_blocks.append((est_height, stocks_html))
+    if gold_html and gold_html.strip():
+        est_height = HEADER_OVERHEAD + (len(gold_coin_prices or {})) * PER_ROW_ITEM
+        big_blocks.append((est_height, gold_html))
+
     num_cols = 3
     col_heights = [0] * num_cols
     col_parts = [[] for _ in range(num_cols)]
-    for block in sorted(big_blocks, key=len, reverse=True):
+    for est_height, block in sorted(big_blocks, key=lambda x: x[0], reverse=True):
         idx = col_heights.index(min(col_heights))
         col_parts[idx].append(block)
-        col_heights[idx] += len(block)
+        col_heights[idx] += est_height
     columns_html = '<div class="columns-row">' + "".join(
         f'<div class="col">{"".join(parts)}</div>' for parts in col_parts if parts
     ) + "</div>"
