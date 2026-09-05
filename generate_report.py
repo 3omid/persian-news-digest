@@ -447,10 +447,29 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
         for label, text in rollups.items() if text
     )
 
-    sections_html = "".join(
+    category_blocks = [
         _render_category_section(category, category_analyses.get(category, {"summary": "داده‌ای موجود نیست.", "items": [], "item_analyses": []}))
         for category in config.RSS_SOURCES.keys()
-    )
+    ]
+
+    # توزیع دستی کارت‌های بزرگ (کریپتو/شرکت‌ها/طلا/هر دسته خبری) بین چند ستون به روش
+    # حریصانه (greedy): چون این کارت‌ها با break-inside:avoid تقسیم‌ناپذیرن و ارتفاع‌شون
+    # خیلی متفاوته (طلا ~۵۰۰px در برابر یک کارت خبری ۱۰تایی ~۱۸۰۰px)، اعتماد به
+    # column-fill نیتیو مرورگر (چه balance چه auto) نتیجه‌ی قابل‌اعتمادی نمی‌ده. اینجا
+    # طول متن HTML هر بلاک به‌عنوان تخمین تقریبی ارتفاعش استفاده می‌شه (بلاک‌های بزرگ‌تر
+    # HTML بیشتری هم دارن) و هر بلاک همیشه به کوتاه‌ترین ستون فعلی اضافه می‌شه - نتیجه
+    # چند ستون تقریبا هم‌قد، بدون فاصله خالی غیرمنتظره.
+    big_blocks = [b for b in ([crypto_html, stocks_html, gold_html] + category_blocks) if b and b.strip()]
+    num_cols = 3
+    col_heights = [0] * num_cols
+    col_parts = [[] for _ in range(num_cols)]
+    for block in sorted(big_blocks, key=len, reverse=True):
+        idx = col_heights.index(min(col_heights))
+        col_parts[idx].append(block)
+        col_heights[idx] += len(block)
+    columns_html = '<div class="columns-row">' + "".join(
+        f'<div class="col">{"".join(parts)}</div>' for parts in col_parts if parts
+    ) + "</div>"
 
     weather_html = ""
     for w in (weather_data or []):
@@ -506,22 +525,22 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .container {{ max-width: 760px; margin: 0 auto; padding: 14px; }}
 
   /* رو صفحه‌ی بزرگ (کامپیوتر) محتوا رو تو یه ستون باریک وسط صفحه نریزیم -
-     همون‌جوری که کارت‌ها روی هم می‌ان، اینجا تو چند ستون کنار هم پخش می‌شن
-     تا فضای خالی دوروبر از بین بره و صفحه شبیه سایت‌های خبری پر و شلوغ بشه. */
+     چند ستون کنار هم پخش می‌شن تا فضای خالی دوروبر از بین بره و صفحه شبیه
+     سایت‌های خبری پر و شلوغ بشه.
+     نکته مهم: اینجا از column-width/column-count نیتیو CSS استفاده نمی‌کنیم، چون
+     الگوریتم بالانس مرورگر (چه balance چه auto) وقتی چندتا کارت خیلی بلند
+     (کارت‌های خبری ۱۰تایی، حدود ۱۷۰۰px) با break-inside:avoid کنار کارت‌های کوتاه
+     (طلا، ارز) باشن، رفتار بدی نشون می‌ده - یا فاصله‌ی خالی غول‌آسا وسط صفحه می‌ذاره
+     (balance) یا کل محتوا رو تو یه ستون جمع می‌کنه چون ارتفاع container از قبل
+     مشخص نیست (auto). به‌جاش پایتون خودش (تابع build_report) بلاک‌های بزرگ رو با
+     یک الگوریتم حریصانه (greedy) از قبل بین چند div.col توزیع می‌کنه و اینجا فقط
+     با flexbox کنار هم می‌چینیم‌شون - چیدمانی که کاملا قابل پیش‌بینیه و هیچ فاصله
+     خالی غیرمنتظره‌ای نداره. */
+  .columns-row {{ display: block; }}
   @media (min-width: 860px) {{
-    .container {{
-      max-width: 1500px; column-width: 460px; column-gap: 18px; padding: 18px;
-      /* column-fill: balance (پیش‌فرض) وقتی چندتا کارت خیلی بلند (مثل کارت‌های خبری
-         ۱۰تایی، حدود ۱۷۰۰px) کنار چندتا کارت کوتاه (طلا، ارز) باشن و break-inside:avoid
-         هم روشون فعال باشه، محاسبه‌ی تعادل ارتفاع ستون‌ها به‌کل به‌هم می‌خوره و یه فاصله‌ی
-         خالی خیلی بزرگ (گاهی چند هزار پیکسل) وسط صفحه می‌ندازه. column-fill: auto این
-         مشکل رو حل می‌کنه: به‌جای تلاش برای هم‌ارتفاع کردن ستون‌ها، هر ستون رو کامل پر
-         می‌کنه و بعد می‌ره سراغ ستون بعدی - دقیقا شبیه چیدمان روزنامه‌ای واقعی. */
-      column-fill: auto;
-    }}
-    .container > * {{
-      break-inside: avoid; -webkit-column-break-inside: avoid;
-    }}
+    .container {{ max-width: 1500px; padding: 18px; }}
+    .columns-row {{ display: flex; align-items: flex-start; gap: 18px; }}
+    .columns-row > .col {{ flex: 1; min-width: 0; }}
   }}
 
   .hero-pair {{ display: flex; gap: 10px; margin-bottom: 12px; }}
@@ -653,10 +672,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   {rollup_html}
   <div class="note-card amber"><div class="note-label">📈 <strong>پیش‌بینی اقتصادی</strong></div>{_md(forecast_text)}</div>
   <div class="note-card blue"><div class="note-label">🏛️ <strong>تحلیل سیاسی</strong></div>{_md(political_text)}</div>
-  {crypto_html}
-  {stocks_html}
-  {gold_html}
-  {sections_html}
+  {columns_html}
 </div>
 <footer>این گزارش به‌صورت خودکار توسط اسکریپت شخصی و Gemini API تولید شده و جایگزین منابع خبری رسمی یا مشاوره مالی نیست.</footer>
 </body>
