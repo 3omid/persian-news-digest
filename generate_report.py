@@ -487,7 +487,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   }}
   body {{
     background: var(--bg); color: var(--text); margin: 0; padding: 0;
-    font-size: 15px; line-height: 1.85;
+    font-size: 15px; line-height: 1.65;
   }}
   header {{
     background: linear-gradient(135deg, var(--navy), var(--navy-dark));
@@ -501,6 +501,18 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   header p {{ margin: 6px 0 0; opacity: .85; font-size: 12.5px; }}
 
   .container {{ max-width: 760px; margin: 0 auto; padding: 14px; }}
+
+  /* رو صفحه‌ی بزرگ (کامپیوتر) محتوا رو تو یه ستون باریک وسط صفحه نریزیم -
+     همون‌جوری که کارت‌ها روی هم می‌ان، اینجا تو چند ستون کنار هم پخش می‌شن
+     تا فضای خالی دوروبر از بین بره و صفحه شبیه سایت‌های خبری پر و شلوغ بشه. */
+  @media (min-width: 860px) {{
+    .container {{
+      max-width: 1500px; column-width: 460px; column-gap: 18px; padding: 18px;
+    }}
+    .container > * {{
+      break-inside: avoid; -webkit-column-break-inside: avoid;
+    }}
+  }}
 
   .hero-pair {{ display: flex; gap: 10px; margin-bottom: 12px; }}
   .hero-card {{
