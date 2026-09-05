@@ -115,6 +115,9 @@ def get_gold_coin_prices():
     خروجی: dict {"طلای ۱۸ عیار": {"price": 19054200, "change_percent": None}, ...}
     نکته: این endpoint فقط قیمت لحظه‌ای می‌ده، نه تاریخچه - برای همین دکمه «نمودار» تو گزارش
     مستقیم به نمودار واقعی خود tgju.org لینک می‌شه، نه یک نمودار جعلی از داده نداشته.
+    نکته مهم: اسلاگ‌های اندیکاتور tgju (مثل price_dollar_rl) با پسوند "_rl" مقدار را به
+    **ریال** برمی‌گردانند، نه تومان (۱ تومان = ۱۰ ریال). چون کل سایت مقادیر را با برچسب
+    «تومان» نمایش می‌دهد، باید همینجا بر ۱۰ تقسیم شود تا عدد نمایش‌داده‌شده درست باشد.
     """
     results = {}
     for title, slug in config.GOLD_COIN_INDICATORS.items():
@@ -125,7 +128,7 @@ def get_gold_coin_prices():
             data = resp.json()
             price = _parse_tgju_price(data)
             if price:
-                results[title] = {"price": price, "slug": slug}
+                results[title] = {"price": price / 10, "slug": slug}
             else:
                 log.warning(f"ساختار پاسخ tgju برای {title} ({slug}) قابل شناسایی نبود.")
         except Exception as e:
@@ -146,6 +149,9 @@ def get_iran_usd_toman():
     نرخ دلار بازار آزاد تهران به تومان (عدد اعشاری خالص، نه رشته/دیکشنری).
     این یک API غیررسمی است و ممکنه ساختارش عوض بشه - در اون صورت None برمی‌گردونه
     و بقیه محاسبات ریالی (تبدیل ارزها به تومان) به‌طور خودکار غیرفعال می‌شن.
+    نکته مهم: اسلاگ endpoint (price_dollar_rl) با پسوند "_rl" نشون می‌ده مقدار برگشتی
+    **ریال** است نه تومان (۱ تومان = ۱۰ ریال) - برای همین اینجا بر ۱۰ تقسیم می‌شه تا
+    عددی که در همه‌جای سایت با برچسب «تومان» نمایش داده می‌شه واقعاً تومان باشه.
     """
     try:
         resp = requests.get(config.IRAN_USD_TOMAN_URL, timeout=15)
@@ -153,7 +159,7 @@ def get_iran_usd_toman():
         data = resp.json()
         price = _parse_tgju_price(data)
         if price is not None:
-            return price
+            return price / 10
         log.warning("ساختار پاسخ tgju قابل شناسایی نبود - بخش تومانی رد می‌شه.")
         return None
     except Exception as e:
