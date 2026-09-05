@@ -22,9 +22,8 @@ import os
 # ---------------------------------------------------------------
 # ۰) کانال‌های خبری تلگرام (از طریق پل RSSHub - t.me/channel_name)
 # ---------------------------------------------------------------
-# نکته مهم: تلگرام خودش RSS نداره، از سرویس عمومی و رایگان RSSHub استفاده می‌کنیم
-# (rsshub.app/telegram/channel/USERNAME). چون در این محیط نمی‌تونستم تلگرام رو باز کنم،
-# یوزرنیم‌های واقعی (تایید شده - از لینک‌های t.me خود کاربر گرفته و زنده بررسی شدن).
+# نکته مهم: تلگرام خودش RSS نداره، از RSSHub استفاده می‌کنیم. یوزرنیم‌های واقعی
+# (تایید شده - از لینک‌های t.me خود کاربر گرفته و زنده بررسی شدن).
 TELEGRAM_CHANNELS = [
     {"name": "وحید هدلاین", "username": "VahidHeadline"},
     {"name": "چرک‌نویس مدیا (CMO)", "username": "Rfrens"},
@@ -35,12 +34,19 @@ TELEGRAM_CHANNELS = [
     {"name": "وحید آنلاین", "username": "VahidOnline"},
     {"name": "Iranwire", "username": "Farsi_Iranwire"},
 ]
+# نکته مهم (کشف‌شده و رفع‌شده): سرور اصلی rsshub.app اخیرا پشت محافظت ضدـربات
+# Cloudflare قرار گرفته و به هر درخواست خودکار/سرور به سرور (مثل GitHub Actions)
+# فقط یک صفحه "Just a moment..." برمی‌گردونه، نه فید RSS واقعی - برای همین همه‌ی
+# ۸ کانال تلگرام همیشه با خطای "منبع جواب نداد" شکست می‌خوردن (ربطی به یوزرنیم‌ها نداشت).
+# rsshub.rss3.workers.dev یک آینه‌ی عمومی و رایگان RSSHub روی Cloudflare Workers‌ه که
+# پشت اون محافظت ضدربات نیست - زنده تست شد و برای چند کانال جواب درست و کامل داد.
+RSSHUB_BASE_URL = "https://rsshub.rss3.workers.dev"
 
 
 def _telegram_source(channel, tag):
     return {
         "name": f"تلگرام: {channel['name']}",
-        "url": f"https://rsshub.app/telegram/channel/{channel['username']}",
+        "url": f"{RSSHUB_BASE_URL}/telegram/channel/{channel['username']}",
         "tag": tag,
     }
 
