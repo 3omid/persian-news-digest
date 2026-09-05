@@ -46,6 +46,26 @@ def _parse_tgju_price(data):
     return None
 
 
+def _parse_tgju_change_percent(data):
+    """
+    درصد تغییر روزانه رو از همون پاسخ جدول تاریخچه‌ی tgju.org می‌خونه (نه یک endpoint جدا).
+    فرمت: ستون ۵ (index) یک رشته HTML شبیه '<span class="high"><span>+2.99%</span></span>' یا
+    برای افت '<span class="low">...-1.23%...</span>' هست. اگه ساختار قابل تشخیص نبود، None برمی‌گردونه
+    (نه صفر) تا کد بالادستی بتونه تشخیص بده که داده در دسترس نبوده، نه اینکه واقعا صفر درصد تغییر کرده.
+    """
+    if isinstance(data, dict) and isinstance(data.get("data"), list) and data["data"]:
+        row = data["data"][0]
+        if isinstance(row, list) and len(row) > 5:
+            raw = str(row[5])
+            m = re.search(r"([+-]?[\d.]+)\s*%", raw)
+            if m:
+                try:
+                    return float(m.group(1))
+                except ValueError:
+                    pass
+    return None
+
+
 def get_currency_series(series_id: str):
     """برمی‌گردونه لیستی از (تاریخ, نرخ) برای چند سال اخیر (کافی برای نمودار روزانه/ماهانه/سالانه)."""
     start_date = (datetime.now() - timedelta(days=365 * config.BOC_HISTORY_YEARS)).strftime("%Y-%m-%d")
@@ -164,6 +184,23 @@ def get_iran_usd_toman():
         return None
     except Exception as e:
         log.error(f"خطا در دریافت نرخ دلار بازار آزاد ایران: {e}")
+        return None
+
+
+def get_iran_usd_toman_change_percent():
+    """
+    درصد تغییر روزانه‌ی دلار بازار آزاد تهران (مثبت یعنی گران‌تر شده، منفی یعنی ارزان‌تر).
+    از همون endpoint دلار (IRAN_USD_TOMAN_URL) استفاده می‌کنه، چون خود جدول تاریخچه‌ی
+    tgju این درصد رو همراه قیمت برمی‌گردونه - نیازی به endpoint یا درخواست جداگانه نیست.
+    اگه ساختار پاسخ قابل شناسایی نبود، None برمی‌گردونه (کارت دلار در گزارش این حالت رو
+    با نمایش «بدون درصد تغییر» به‌جای عدد غلط/صفر مدیریت می‌کنه).
+    """
+    try:
+        resp = requests.get(config.IRAN_USD_TOMAN_URL, timeout=15)
+        resp.raise_for_status()
+        return _parse_tgju_change_percent(resp.json())
+    except Exception as e:
+        log.error(f"خطا در دریافت درصد تغییر دلار بازار آزاد ایران: {e}")
         return None
 
 
