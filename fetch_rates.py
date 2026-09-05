@@ -4,6 +4,7 @@
 و دلار بازار آزاد ایران (غیررسمی).
 """
 
+import bisect
 import logging
 import re
 from datetime import datetime, timedelta
@@ -308,6 +309,84 @@ def get_iran_usd_toman_change_percent():
     except Exception as e:
         log.error(f"خطا در دریافت درصد تغییر دلار بازار آزاد ایران: {e}")
         return None
+
+
+def get_iran_usd_toman_series():
+    """
+    برخلاف get_iran_usd_toman (که فقط آخرین قیمت رو می‌ده)، این تابع کل تاریخچه‌ی روزانه‌ی
+    نرخ دلار بازار آزاد تهران رو برمی‌گردونه: [(تاریخ "YYYY-MM-DD", قیمت به تومان), ...]
+    به ترتیب صعودی (قدیم -> جدید).
+
+    چرا این لازم شد: قبلا نمودار «دلار آمریکا» و «دلار کانادا» توی گزارش هر دو مستقیم از
+    روی همون یک سری نرخ رسمی USD/CAD (بانک مرکزی کانادا) رسم می‌شدن - یعنی دقیقا یک نمودار
+    با دو عنوان مختلف (کاربر درست متوجه شد که «انگار نمودار کپی شده»). دلیلش این فرض غلط بود
+    که «تاریخچه‌ی رایگان نرخ تومانی در دسترس نیست» - ولی همون endpoint که get_iran_usd_toman
+    ازش قیمت لحظه‌ای می‌گیره (IRAN_USD_TOMAN_URL)، در واقع یک جدول تاریخچه‌ی کامل (چند صد تا
+    چند هزار روز) برمی‌گردونه، نه فقط یک عدد؛ فقط قبلا فقط ردیف اول (جدیدترین روز) ازش
+    خونده می‌شد. این تابع همه‌ی ردیف‌ها رو می‌خونه تا نمودار «دلار آمریکا» بتونه از روی
+    تاریخچه‌ی واقعی و مستقیم نرخ تومانی رسم بشه (نه یک نمودار جایگزین/کپی).
+    """
+    try:
+        # length/start تلاشیه برای گرفتن بیشترین تاریخچه‌ی ممکن از این API غیررسمی
+        # (که مستندات رسمی نداره)؛ اگه سرور این پارامترها رو نادیده بگیره، همون رفتار
+        # پیش‌فرضش (چند صد روز اخیر) هم برای نمودار روزانه/ماهانه کاملا کافیه.
+        resp = requests.get(config.IRAN_USD_TOMAN_URL, params={"length": 5000, "start": 0}, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
+        rows = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            log.warning("ساختار پاسخ تاریخچه‌ی دلار بازار آزاد ایران قابل شناسایی نبود.")
+            return []
+
+        by_date = {}
+        for row in rows:
+            if not isinstance(row, list) or len(row) <= 6:
+                continue
+            try:
+                price_rial = float(str(row[3]).replace(",", "").strip())
+            except (ValueError, TypeError):
+                continue
+            # ستون ۶ تاریخ میلادی به فرمت "2026/09/03"ه؛ برای سازگاری با سری‌های بانک
+            # مرکزی کانادا (که ISO "YYYY-MM-DD" هستن) به همون فرمت تبدیل می‌شه.
+            date_parts = str(row[6]).strip().split("/")
+            if len(date_parts) != 3:
+                continue
+            y, m, d = date_parts
+            date_iso = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+            if price_rial > 0:
+                by_date[date_iso] = price_rial / 10  # ریال -> تومان
+
+        return sorted(by_date.items())
+    except Exception as e:
+        log.error(f"خطا در دریافت تاریخچه‌ی نرخ دلار بازار آزاد ایران: {e}")
+        return []
+
+
+def compute_cad_toman_series(usd_toman_series, usd_cad_series):
+    """
+    چون بازار آزاد ایران نرخ مستقیم «دلار کانادا به تومان» منتشر نمی‌کنه (فقط دلار آمریکا)،
+    تاریخچه‌ی دلار کانادا/تومان از روی همین دو داده‌ی واقعی محاسبه می‌شه، نه کپی از نمودار
+    نرخ رسمی USD/CAD: CAD_Toman(تاریخ) = USD_Toman(تاریخ) ÷ USD/CAD(نزدیک‌ترین روز کاری قبل).
+    (همون فرمولی که compute_toman_rates برای عدد لحظه‌ای «الان» استفاده می‌کنه، اینجا برای
+    کل تاریخچه تکرار می‌شه.) چون بانک مرکزی کانادا فقط روزهای کاری نرخ منتشر می‌کنه ولی بازار
+    آزاد ایران هرروزه‌ست، برای هر تاریخ دلار/تومان، آخرین نرخ USD/CAD موجود تا همون تاریخ
+    (نه لزوما دقیقا همون روز) استفاده می‌شه - نه یک تطبیق دقیق روز‌به‌روز که خیلی از روزها
+    خالی می‌موند.
+    """
+    if not usd_toman_series or not usd_cad_series:
+        return []
+    cad_dates = [d for d, _ in usd_cad_series]
+    cad_values = [v for _, v in usd_cad_series]
+
+    result = []
+    for date_str, usd_toman_val in usd_toman_series:
+        idx = bisect.bisect_right(cad_dates, date_str) - 1
+        if idx < 0:
+            continue
+        cad_rate = cad_values[idx]
+        if cad_rate:
+            result.append((date_str, usd_toman_val / cad_rate))
+    return result
 
 
 def compute_toman_rates(iran_usd_toman, resampled_currencies):

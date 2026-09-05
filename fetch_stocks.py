@@ -29,14 +29,22 @@ def _fetch_daily_history(symbol):
         if not result:
             return None
         quotes = result[0]["indicators"]["quote"][0]
-        opens = [v for v in quotes.get("open", []) if v is not None]
-        closes = [v for v in quotes.get("close", []) if v is not None]
-        if not opens or not closes:
+        raw_opens = quotes.get("open", [])
+        raw_closes = quotes.get("close", [])
+        # نکته مهم (اصلاح باگ): قبلا open و close هرکدوم جدا از دیگری فیلتر می‌شدن (None
+        # هاشون مستقل حذف می‌شد)، بدون توجه به این‌که ایندکس‌هاشون به چه روزی اشاره داره.
+        # وقتی بازار هنوز بازه، یاهو برای کندل امروز معمولا open داره ولی close هنوز None
+        # است (روز کامل نشده) - فیلتر مستقل باعث می‌شد opens[-1] (باز شدن امروز) با
+        # closes[-1] (در واقع بسته‌شدن دیروز، چون آخرین close غیر-None امروز نبود) مقایسه
+        # بشه؛ یعنی «تغییر روزانه» در واقع یک گپ شبانه‌ی غلط بود، نه تغییر واقعی امروز.
+        # الان فقط روزهایی که هم open و هم close دارن (هم‌ایندکس) نگه داشته می‌شن.
+        paired = [(o, c) for o, c in zip(raw_opens, raw_closes) if o is not None and c is not None]
+        if not paired:
             return None
         return {
-            "today_open": opens[-1],
-            "today_close": closes[-1],
-            "week_open": opens[0],
+            "today_open": paired[-1][0],
+            "today_close": paired[-1][1],
+            "week_open": paired[0][0],
         }
     except Exception as e:
         log.error(f"خطا در دریافت تاریخچه قیمت {symbol}: {e}")

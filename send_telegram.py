@@ -8,6 +8,29 @@ import config
 
 log = logging.getLogger(__name__)
 
+TELEGRAM_TEXT_LIMIT = 4096
+
+
+def _safe_truncate_html(text: str, limit: int) -> str:
+    """
+    برش امن یک متن با تگ‌های ساده‌ی <b>...</b> (همونایی که main.py برای عنوان هر دسته
+    می‌سازه) در مرز محدودیت کاراکتری تلگرام. قبلا این برش با یک [:limit] ساده انجام
+    می‌شد که ممکن بود دقیقا وسط یک تگ <b> یا </b> ببره؛ در اون حالت تلگرام کل پیام رو با
+    خطای "can't find end of the entity" رد می‌کنه (نه فقط قسمت بریده‌شده رو). اینجا اگه
+    بعد از برش یک <b> بدون </b> بسته‌کننده باقی بمونه، متن تا آخرین خط کامل قبلی کوتاه
+    می‌شه و در صورت لزوم </b> بسته می‌شه تا پیام همیشه سالم بمونه.
+    """
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    if cut.count("<b>") > cut.count("</b>"):
+        last_safe_nl = cut.rfind("\n")
+        if last_safe_nl > 0:
+            cut = cut[:last_safe_nl]
+        if cut.count("<b>") > cut.count("</b>"):
+            cut += "</b>"
+    return cut.rstrip() + "\n…"
+
 
 def send_report(html_path: str, short_summary: str = ""):
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
@@ -22,7 +45,7 @@ def send_report(html_path: str, short_summary: str = ""):
             # واقعا بولد نمایش داده بشه، نه به‌صورت تگ خام تو پیام.
             resp = requests.post(f"{base}/sendMessage", data={
                 "chat_id": config.TELEGRAM_CHAT_ID,
-                "text": short_summary[:4000],
+                "text": _safe_truncate_html(short_summary, TELEGRAM_TEXT_LIMIT - 96),
                 "parse_mode": "HTML",
             }, timeout=20)
             if not resp.ok:

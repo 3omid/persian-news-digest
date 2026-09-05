@@ -87,16 +87,34 @@ def main():
             return
         news_by_category = {k: (v if k == args.category else []) for k, v in news_by_category.items()}
 
-    total_new = sum(len(v) for v in news_by_category.values())
-    log.info(f"مجموع خبر جدید: {total_new}")
+    # نکته مهم (اصلاح باگ): این متغیر قبلا "total_new" نام داشت ولی در واقع تعداد کل
+    # خبرهای *نمایش‌داده‌شده* (تا ۹۶ ساعت اخیر، طبق config.DISPLAY_LOOKBACK_HOURS) رو
+    # می‌شمرد، نه خبرهای واقعا تازه (is_new). چون تقریبا همیشه حداقل یک خبر نمایشی در بازه‌ی
+    # ۹۶ساعته پیدا می‌شه، این گیت عملا بی‌اثر بود مگر در حالت نادر خرابی کامل همه‌ی منبع‌های
+    # RSS - ولی همون حالت نادر دقیقا باعث می‌شد در بدترین لحظه (وقتی همه‌چیز خراب شده)، کل
+    # گزارش (شامل نرخ ارز/طلا/کریپتو که هیچ ربطی به خبر ندارن) اصلا آپدیت نشه و سایت با اعداد
+    # قدیمی بمونه - دقیقا همون مشکلی که کاربر گزارش داد. حالا این گیت فقط جلوی «گزارش کاملا
+    # خالی» (وقتی هیچ خبری، حتی قدیمی، از هیچ منبعی نیومده - نشونه‌ی قطعی مشکل شبکه) رو
+    # می‌گیره؛ در غیر این صورت گزارش/نرخ‌ها هر بار اجرای ساعتی (چه خبر تازه‌ای باشه چه نه)
+    # کامل به‌روزرسانی و منتشر می‌شن. تعداد خبر *واقعا* تازه جداگانه محاسبه می‌شه و فقط برای
+    # تصمیم «ارسال پیام تلگرام یا نه» (پایین‌تر) استفاده می‌شه تا هر ساعت با یک پیام تکراری
+    # تلگرام اسپم نشه.
+    total_displayed = sum(len(v) for v in news_by_category.values())
+    total_new = sum(1 for items in news_by_category.values() for it in items if it.get("is_new"))
+    log.info(f"مجموع خبر نمایش‌داده‌شده: {total_displayed} (از این تعداد واقعا جدید: {total_new})")
 
-    if total_new == 0 and not args.force:
-        log.info("خبر جدیدی نبود - گزارش ساخته نمی‌شود. (برای اجبار از --force استفاده کن)")
+    if total_displayed == 0 and not args.force:
+        log.warning(
+            "هیچ خبری (حتی قدیمی) از هیچ منبعی دریافت نشد - احتمالا مشکل شبکه/RSS در این اجرا. "
+            "برای جلوگیری از انتشار گزارش خالی/خراب، این اجرا متوقف می‌شود. "
+            "(برای اجبار از --force استفاده کن)"
+        )
         return
 
     log.info("دریافت نرخ ارز، طلا و کریپتو...")
     currencies = fetch_rates.get_all_currencies()
     iran_usd_toman = fetch_rates.get_iran_usd_toman()
+    iran_usd_toman_series = fetch_rates.get_iran_usd_toman_series()
     usd_change_percent = fetch_rates.get_iran_usd_toman_change_percent()
     gold_coin_prices = fetch_rates.get_gold_coin_prices()
     stock_movers = fetch_stocks.get_stock_movers()
@@ -132,7 +150,7 @@ def main():
         gold_coin_prices=gold_coin_prices,
         crypto_market=crypto_market, crypto_text=crypto_text, stock_movers=stock_movers,
         weather_data=weather_data, rollups=rollups, usd_change_percent=usd_change_percent,
-        stocks_text=stocks_text,
+        stocks_text=stocks_text, iran_usd_toman_series=iran_usd_toman_series,
     )
     log.info(f"گزارش ساخته شد: {report_path}")
 
@@ -152,7 +170,17 @@ def main():
             body = html.escape(_smart_truncate(summary, 280))
         lines.append(f"{icon} <b>{cat_esc}</b>\n{body}")
     short_summary = "📰 <b>خلاصه اخبار</b>\n\n" + "\n\n➖➖➖➖➖\n\n".join(lines)
-    send_telegram.send_report(report_path, short_summary)
+
+    # سایت/گزارش HTML همیشه بالا (این تابع) ساخته و منتشر می‌شه، ولی پیام تلگرام فقط وقتی
+    # حداقل یک خبر *واقعا* تازه باشه (یا با --force) ارسال می‌شه - دقیقا همون طراحی اصلی
+    # مستندشده در ابتدای fetch_news.py ("فقط وقتی حداقل یک خبر واقعا تازه باشه، پیام
+    # تلگرام/آپدیت واقعا انجام می‌شه") که با باگ بالا (شمارش خبر نمایشی به‌جای خبر تازه)
+    # عملا هیچ‌وقت درست اجرا نمی‌شد. این‌طوری کاربر هر ساعت با یک پیام تلگرام تکراری
+    # (وقتی هیچ خبر تازه‌ای نیست) اسپم نمی‌شه، ولی خود سایت همیشه به‌روزه.
+    if total_new > 0 or args.force:
+        send_telegram.send_report(report_path, short_summary)
+    else:
+        log.info("خبر واقعا جدیدی برای اطلاع‌رسانی تلگرام نبود - فقط سایت آپدیت شد، پیامی ارسال نشد.")
 
 
 if __name__ == "__main__":

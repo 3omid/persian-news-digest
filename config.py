@@ -106,8 +106,12 @@ RSS_SOURCES = {
     ],
     "مهاجرت کانادا": [
         {"name": "CIC News", "url": "https://www.cicnews.com/feed", "tag": "immigration"},
-        {"name": "IRCC - اخبار رسمی دولت کانادا", "url": "https://www.canada.ca/en/immigration-refugees-citizenship/news.atom.xml",
-         "tag": "immigration official - TO VERIFY"},
+        # آدرس قبلی (.../news.atom.xml) به‌صورت زنده بررسی شد و ۴۰۴ برمی‌گردوند (این منبع
+        # همیشه ساکت شکست می‌خورد، هیچ‌وقت خبری نمی‌آورد). آدرس درست و زنده‌ی فید رسمی
+        # اخبار IRCC از صفحه‌ی راهنمای RSS خود canada.ca گرفته و تایید شد.
+        {"name": "IRCC - اخبار رسمی دولت کانادا",
+         "url": "https://api.io.canada.ca/io-server/gc/news/en/v2?dept=departmentofcitizenshipandimmigration&sort=publishedDate&orderBy=desc&pick=50&format=atom&atomtitle=Immigration,%20Refugees%20and%20Citizenship%20Canada",
+         "tag": "immigration official"},
         {"name": "Immigration.ca Blog", "url": "https://www.immigration.ca/feed/", "tag": "immigration - TO VERIFY"},
         {"name": "Moving2Canada", "url": "https://moving2canada.com/feed/", "tag": "immigration - TO VERIFY"},
     ],
@@ -276,7 +280,7 @@ MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "gemini")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-3.5-flash-lite"  # طبق پیام خود گوگل: حساب‌های جدید فقط این نسخه به بعد رو می‌بینن
 
-CLAUDE_MODEL = "claude-sonnet-4-6"
+CLAUDE_MODEL = "claude-sonnet-5"  # قبلا "claude-sonnet-4-6" بود که اصلا وجود نداره (شناسه معتبر نیست)
 CLAUDE_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # ---------------------------------------------------------------

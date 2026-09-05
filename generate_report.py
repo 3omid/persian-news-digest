@@ -275,7 +275,7 @@ def _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=None)
     """
 
 
-def _usd_cad_rate_note(resampled_currencies):
+def _usd_cad_rate_note(resampled_currencies, usd_toman_resampled=None, cad_toman_resampled=None):
     """
     کاربر متوجه شده بود که کارت‌های بزرگ دلار آمریکا/کانادا بالای صفحه - برخلاف
     ردیف‌های ارزهای دیگه پایین‌تر - قابل کلیک نیستن و هیچ آمار/نموداری نشون نمی‌دن،
@@ -286,6 +286,16 @@ def _usd_cad_rate_note(resampled_currencies):
     نکته: این درصدِ تغییرِ خودِ نرخ USD/CAD هست (مثبت = دلار آمریکا در برابر کانادا
     قوی‌تر شده)، نه درصد تغییر ارزش تومانی که تو کارت‌های بالا نمایش داده می‌شه -
     این دو مفهوم متفاوتن و عمدا اینجا علامتش برعکس نمی‌شه.
+
+    اصلاح باگ مهم: قبلا کارت‌های «دلار آمریکا» و «دلار کانادا» (که هردو موضوعشون نرخ
+    تومانیه) هر دو مستقیم از روی همین یک سری نرخ رسمی USD/CAD رسم می‌شدن - یعنی کاربر
+    وقتی رو هرکدوم کلیک می‌کرد، دقیقا همون یک نمودار رو با عنوان‌های مختلف می‌دید (کاربر:
+    «انگار نمودار کپی شده از نرخ دلار آمریکا به کانادا است»). الان اگه تاریخچه‌ی واقعی
+    دلار/تومان در دسترس باشه (fetch_rates.get_iran_usd_toman_series)، نمودار «دلار
+    آمریکا» از روی همون تاریخچه‌ی واقعی رسم می‌شه، و نمودار «دلار کانادا» از روی تاریخچه‌ی
+    محاسبه‌شده‌ی dollar/تومان تقسیم بر نرخ رسمی USD/CAD (fetch_rates.compute_cad_toman_series)
+    - این دو دیگه یکی نیستن. نمودار #chart-usdcad (نرخ برابری دو دلار) جدا و بدون تغییر
+    می‌مونه چون موضوعش اصلا فرق داره (برابری دو ارز، نه قیمت تومانی).
     """
     usd_cad = resampled_currencies.get("USD/CAD", {})
     daily = usd_cad.get("daily", [])
@@ -305,31 +315,66 @@ def _usd_cad_rate_note(resampled_currencies):
     </a>
     """
 
-    # نمودارها فقط یک‌بار ساخته می‌شن و بین هر سه اورلی (usd/cad/usdcad) به اشتراک
-    # گذاشته می‌شن - چون تنها سری تاریخی واقعی که این پروژه در اختیار داره همین
-    # نرخ رسمی USD/CAD (بانک مرکزی کانادا) هست؛ تاریخچه‌ی جداگانه‌ای برای نرخ
-    # تومانی دلار آمریکا یا دلار کانادا وجود نداره. برای همین هرکدوم با تیتر و
-    # توضیح مخصوص به خودشون نمایش داده می‌شن تا کاربر گمراه نشه که این عدد دقیقا
-    # مال کدوم موضوعه.
-    daily_b64 = _line_chart(daily, "USD/CAD - Daily")
-    monthly_b64 = _line_chart(usd_cad.get("monthly", []), "USD/CAD - Monthly")
-    yearly_b64 = _line_chart(usd_cad.get("yearly", []), "USD/CAD - Yearly")
+    usd_cad_daily_b64 = _line_chart(daily, "USD/CAD - Daily")
+    usd_cad_monthly_b64 = _line_chart(usd_cad.get("monthly", []), "USD/CAD - Monthly")
+    usd_cad_yearly_b64 = _line_chart(usd_cad.get("yearly", []), "USD/CAD - Yearly")
 
-    shared_note = (
-        "چون تاریخچه‌ی روزانه‌ی نرخ تومانی این ارز به‌صورت رایگان در دسترس نیست، "
-        "این نمودار بر اساس نرخ رسمی برابری دلار آمریکا/کانادا (بانک مرکزی کانادا) رسم شده."
-    )
+    usd_toman_resampled = usd_toman_resampled or {}
+    cad_toman_resampled = cad_toman_resampled or {}
+    usd_toman_daily = usd_toman_resampled.get("daily", [])
+    cad_toman_daily = cad_toman_resampled.get("daily", [])
 
-    overlays_html = (
-        _chart_overlay("usd", "دلار آمریکا (USD)", shared_note, daily_b64, monthly_b64, yearly_b64)
-        + _chart_overlay("cad", "دلار کانادا (CAD)", shared_note, daily_b64, monthly_b64, yearly_b64)
-        + _chart_overlay(
-            "usdcad", "دلار آمریکا به دلار کانادا (USD/CAD)",
-            "نرخ رسمی بانک مرکزی کانادا - نشون می‌ده هر ۱ دلار آمریکا معادل چند دلار کاناداست",
-            daily_b64, monthly_b64, yearly_b64,
+    if usd_toman_daily:
+        usd_note = (
+            "بر اساس تاریخچه‌ی واقعی نرخ دلار بازار آزاد تهران (تومان) - نه نرخ برابری با کانادا."
         )
+        usd_overlay = _chart_overlay(
+            "usd", "دلار آمریکا (تومان)", usd_note,
+            _line_chart(usd_toman_daily, "USD/Toman - Daily"),
+            _line_chart(usd_toman_resampled.get("monthly", []), "USD/Toman - Monthly"),
+            _line_chart(usd_toman_resampled.get("yearly", []), "USD/Toman - Yearly"),
+        )
+    else:
+        # اگه واکشی تاریخچه‌ی واقعی (شبکه/API غیررسمی tgju) این‌بار شکست خورد، به‌جای
+        # نمایش نمودار خالی، همون نمودار قبلی (نرخ رسمی USD/CAD) به‌عنوان جایگزین امن
+        # نشون داده می‌شه - افت درجه‌ی کیفیت، نه یک صفحه‌ی خراب.
+        usd_note = (
+            "تاریخچه‌ی واقعی نرخ تومانی این‌بار در دسترس نبود؛ این نمودار موقتا بر اساس "
+            "نرخ رسمی برابری دلار آمریکا/کانادا رسم شده."
+        )
+        usd_overlay = _chart_overlay(
+            "usd", "دلار آمریکا (USD)", usd_note,
+            usd_cad_daily_b64, usd_cad_monthly_b64, usd_cad_yearly_b64,
+        )
+
+    if cad_toman_daily:
+        cad_note = (
+            "چون بازار آزاد ایران نرخ مستقیم دلار کانادا منتشر نمی‌کنه، این تاریخچه از تقسیم "
+            "نرخ واقعی دلار آمریکا/تومان بر نرخ رسمی USD/CAD (بانک مرکزی کانادا) محاسبه شده."
+        )
+        cad_overlay = _chart_overlay(
+            "cad", "دلار کانادا (تومان)", cad_note,
+            _line_chart(cad_toman_daily, "CAD/Toman - Daily"),
+            _line_chart(cad_toman_resampled.get("monthly", []), "CAD/Toman - Monthly"),
+            _line_chart(cad_toman_resampled.get("yearly", []), "CAD/Toman - Yearly"),
+        )
+    else:
+        cad_note = (
+            "تاریخچه‌ی واقعی نرخ تومانی این‌بار در دسترس نبود؛ این نمودار موقتا بر اساس "
+            "نرخ رسمی برابری دلار آمریکا/کانادا رسم شده."
+        )
+        cad_overlay = _chart_overlay(
+            "cad", "دلار کانادا (CAD)", cad_note,
+            usd_cad_daily_b64, usd_cad_monthly_b64, usd_cad_yearly_b64,
+        )
+
+    usdcad_overlay = _chart_overlay(
+        "usdcad", "دلار آمریکا به دلار کانادا (USD/CAD)",
+        "نرخ رسمی بانک مرکزی کانادا - نشون می‌ده هر ۱ دلار آمریکا معادل چند دلار کاناداست",
+        usd_cad_daily_b64, usd_cad_monthly_b64, usd_cad_yearly_b64,
     )
-    return note_html, overlays_html
+
+    return note_html, (usd_overlay + cad_overlay + usdcad_overlay)
 
 
 def _currency_section(toman_rates, resampled_currencies):
@@ -483,12 +528,27 @@ def _render_news_item(it, accent_color, item_analysis, number):
           <div class="analysis-text">{item_analysis}</div>
         </details>
         """
+    # نکته مهم (رفع درخواست کاربر): وقتی ترجمه‌ی فارسیِ تیتر توسط analyze.py انجام نشه
+    # (مثلا به‌خاطر خطای موقت API)، تیتر انگلیسی خام نمایش داده می‌شد بدون هیچ راهی برای
+    # کاربر که بفهمه چرا. الان همیشه هم نسخه‌ی فارسی و هم نسخه‌ی اصلی (زبان مبدا) هر خبر تو
+    # HTML موجوده؛ دکمه‌ی سراسری بالای صفحه (toggleOriginalLang در JS) بین‌شون سوییچ می‌کنه -
+    # پیش‌فرض همیشه فارسیه. اگه ترجمه‌ای اتفاق نیفتاده باشه (تیتر از قبل فارسی بوده، یا
+    # تحلیل این خبر اصلا انجام نشده)، دو نسخه یکی‌ان و دکمه چیز اضافه‌ای نشون نمی‌ده.
+    title_fa = it["title"]
+    title_orig = it.get("title_original") or title_fa
+    if title_orig != title_fa:
+        title_html = (
+            f'<span class="title-fa">{title_fa}</span>'
+            f'<span class="title-orig" dir="auto">{title_orig}</span>'
+        )
+    else:
+        title_html = f'<span class="title-fa">{title_fa}</span>'
     return f"""
     <div class="news-item" style="border-right-color:{accent_color};">
       <div class="news-num" style="background:{accent_color};">{to_persian_digits(str(number))}</div>
       <div class="news-body">
         <div class="news-source">{it['source']}{new_badge}</div>
-        <div class="news-title">{it['title']}</div>
+        <div class="news-title">{title_html}</div>
         <div class="news-meta">{dual_date}</div>
         <div class="news-actions">
           <a class="news-link" href="{it['link']}" target="_blank">مشاهده متن کامل خبر ←</a>
@@ -524,7 +584,8 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
                   forecast_text: str, political_text: str,
                   gold_coin_prices=None, crypto_market=None, crypto_text: str = "",
                   stock_movers=None, weather_data=None, rollups: dict = None, output_dir: str = None,
-                  usd_change_percent=None, stocks_text: str = "") -> str:
+                  usd_change_percent=None, stocks_text: str = "",
+                  iran_usd_toman_series=None) -> str:
     output_dir = output_dir or config.OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
     rollups = rollups or {}
@@ -542,8 +603,18 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     resampled_currencies = {name: _fr.resample_by_period(series) for name, series in currencies.items()}
     toman_rates = _fr.compute_toman_rates(iran_usd_toman, resampled_currencies)
 
+    # تاریخچه‌ی واقعی دلار/تومان (برای نمودار «دلار آمریکا») + محاسبه‌ی تاریخچه‌ی دلار
+    # کانادا/تومان از روی همون + نرخ رسمی USD/CAD (برای نمودار «دلار کانادا») - رجوع کن
+    # به توضیح باگ داخل _usd_cad_rate_note برای این‌که چرا این دو قبلا یک نمودار تکراری بودن.
+    iran_usd_toman_series = iran_usd_toman_series or []
+    cad_toman_series = _fr.compute_cad_toman_series(iran_usd_toman_series, currencies.get("USD/CAD", []))
+    usd_toman_resampled = _fr.resample_by_period(iran_usd_toman_series)
+    cad_toman_resampled = _fr.resample_by_period(cad_toman_series)
+
     hero_html = _toman_hero_pair(toman_rates, resampled_currencies, usd_change_percent=usd_change_percent)
-    usd_cad_note_html, usd_cad_overlay_html = _usd_cad_rate_note(resampled_currencies)
+    usd_cad_note_html, usd_cad_overlay_html = _usd_cad_rate_note(
+        resampled_currencies, usd_toman_resampled, cad_toman_resampled
+    )
     currency_rows, currency_overlays = _currency_section(toman_rates, resampled_currencies)
     currency_overlays = usd_cad_overlay_html + currency_overlays
     currency_section_html = f"""
@@ -627,48 +698,49 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>خلاصه اخبار - {now_str}</title>
 <style>
-  /* فونت Sahel سلف‌هاست‌شده - کاربر فونت قبلی (Vazirmatn) رو روی آیفون قبول نداشت و
-     دقیقا همون فونتی رو خواست که سایت‌های خبری مالی مثل tgju.org استفاده می‌کنن
-     (IRANSans/Iranyekan). اون فونت‌ها تجاری/خصوصی‌ان و مجوز توزیع رایگان ندارن، برای
-     همین به‌جاش از Sahel استفاده شده - یک فونت فارسی کاملا رایگان و متن‌باز (مجوز
-     SIL OFL، توسط همون توسعه‌دهنده‌ی Vazirmatn) که همون حس تمیز و حرفه‌ای رو داره.
-     مثل قبل، خودِ فایل‌های فونت (woff2) داخل مخزن (assets/fonts) قرار گرفته و مستقیم
-     از همون GitHub Pages سرو می‌شه - هیچ وابستگی به دامنه‌ی خارجی نیست، پس رو هر
-     دستگاه/شبکه‌ای دقیقا همون فونتیه که رو کامپیوتر دیده می‌شه. */
+  /* فونت Estedad سلف‌هاست‌شده - قبلا Vazirmatn بود (کاربر رو آیفون قبول نداشت)، بعد Sahel
+     (کاربر گفت زیبا نیست). درخواست بعدی «مثل tgju.org» (IRANSans/Iranyekan) بود که
+     تجاری/خصوصی‌ان و مجوز توزیع رایگان ندارن. Peyda هم امتحان شد ولی معلوم شد محصول فروشی
+     فونت‌ایرانه (ریسک حقوقی برای قراردادن رایگان تو یک ریپو/سایت عمومی). Estedad یک فونت
+     فارسی/عربی کاملا رایگان و متن‌باز (SIL OFL 1.1، github.com/aminabedi68/Estedad - متن
+     کامل مجوز کنار خود فایل‌ها در assets/fonts/ESTEDAD-OFL-LICENSE.txt) با ظاهر هندسی و
+     مدرن‌تر از Sahel/Vazirmatn. مثل قبل، خودِ فایل‌های فونت (woff2) داخل مخزن (assets/fonts)
+     قرار گرفته و مستقیم از همون GitHub Pages سرو می‌شه - هیچ وابستگی به دامنه‌ی خارجی
+     نیست، پس رو هر دستگاه/شبکه‌ای دقیقا همون فونتیه که رو کامپیوتر دیده می‌شه. */
   @font-face {{
-    font-family: 'Sahel';
+    font-family: 'Estedad';
     font-style: normal;
     font-weight: 300;
     font-display: swap;
-    src: url('assets/fonts/sahel-light.woff2') format('woff2');
+    src: url('assets/fonts/estedad-light.woff2') format('woff2');
   }}
   @font-face {{
-    font-family: 'Sahel';
+    font-family: 'Estedad';
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url('assets/fonts/sahel-regular.woff2') format('woff2');
+    src: url('assets/fonts/estedad-regular.woff2') format('woff2');
   }}
   @font-face {{
-    font-family: 'Sahel';
+    font-family: 'Estedad';
     font-style: normal;
     font-weight: 500 600;
     font-display: swap;
-    src: url('assets/fonts/sahel-semibold.woff2') format('woff2');
+    src: url('assets/fonts/estedad-semibold.woff2') format('woff2');
   }}
   @font-face {{
-    font-family: 'Sahel';
+    font-family: 'Estedad';
     font-style: normal;
     font-weight: 700;
     font-display: swap;
-    src: url('assets/fonts/sahel-bold.woff2') format('woff2');
+    src: url('assets/fonts/estedad-bold.woff2') format('woff2');
   }}
   @font-face {{
-    font-family: 'Sahel';
+    font-family: 'Estedad';
     font-style: normal;
     font-weight: 800 900;
     font-display: swap;
-    src: url('assets/fonts/sahel-black.woff2') format('woff2');
+    src: url('assets/fonts/estedad-black.woff2') format('woff2');
   }}
   :root {{
     --bg: #eef1f5;
@@ -689,7 +761,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     text-size-adjust: 100%;
   }}
   html, body, div, span, h1, h2, h3, p, a, label, summary, input {{
-    font-family: 'Sahel', Tahoma, Arial, sans-serif !important;
+    font-family: 'Estedad', Tahoma, Arial, sans-serif !important;
     /* رندر فونت روی وب‌کیت/سافاری (به‌خصوص آیفون) بدون این پرچم‌ها ضخیم‌تر و
        کم‌کیفیت‌تر از نسخه‌ی دسکتاپ دیده می‌شه. */
     -webkit-font-smoothing: antialiased;
@@ -708,7 +780,25 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .header-top {{ display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }}
   .weather-chips {{ display: flex; gap: 8px; flex-wrap: wrap; }}
   .weather-chip {{ background: rgba(255,255,255,.15); border-radius: 20px; padding: 3px 11px; font-size: 11px; white-space: nowrap; }}
+  .header-top-left {{ display: flex; align-items: center; gap: 10px; }}
   .header-name {{ font-weight: 700; font-size: 13px; }}
+  /* دکمه‌ی سراسری «نمایش زبان اصلی» - رفع درخواست کاربر: بعضی خبرها (وقتی ترجمه‌ی
+     فارسی‌شون به هر دلیلی انجام نشده) به زبان اصلی (معمولا انگلیسی) می‌مونن؛ به‌جای مخفی
+     کردن این موضوع، یک دکمه‌ی سراسری اضافه شده که بین «تیتر فارسی» (پیش‌فرض) و «تیتر
+     اصلی/زبان مبدا» برای همه‌ی خبرهای صفحه یکجا سوییچ می‌کنه (فقط CSS+JS خالص، بدون
+     نیاز به بارگذاری دوباره‌ی صفحه). خبرهایی که از قبل فارسی بودن یا ترجمه‌شون یکسانه،
+     تفاوتی با سوییچ نمی‌کنن.
+     نکته: title-orig پیش‌فرض مخفیه (display:none)؛ اگه body.show-original ست بشه، جای
+     نمایش‌شون برعکس می‌شه - این‌کارو خود JS پایین صفحه انجام می‌ده. */
+  .lang-toggle-btn {{
+    background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.35); color: #fff;
+    border-radius: 20px; padding: 5px 13px; font-size: 12px; cursor: pointer; white-space: nowrap;
+    font-family: 'Estedad', Tahoma, Arial, sans-serif;
+  }}
+  .lang-toggle-btn:hover {{ background: rgba(255,255,255,.28); }}
+  .title-orig {{ display: none; }}
+  body.show-original .title-fa {{ display: none; }}
+  body.show-original .title-orig {{ display: inline; }}
   header h1 {{ margin: 0; font-size: 21px; font-weight: 800; }}
   header p {{ margin: 6px 0 0; opacity: .85; font-size: 12.5px; }}
 
@@ -855,7 +945,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   footer {{ text-align: center; padding: 22px; font-size: 11px; color: var(--muted); }}
 
   /* روی گوشی (به‌خصوص آیفون)، خیلی از متن‌های ریز این صفحه (۱۰.۵ تا ۱۲.۵ پیکسل - برای
-     برچسب قیمت/واحد/منبع خبر/زمان و غیره) با وجود فونت درست (Sahel)، به‌خاطر
+     برچسب قیمت/واحد/منبع خبر/زمان و غیره) با وجود فونت درست (Estedad)، به‌خاطر
      ریزنقشی و پیچیدگی حروف فارسی نسبت به لاتین، در این سایزهای کوچیک کمتر واضح به‌نظر
      می‌رسن - این ربطی به نوع فونت نداره، صرفا اندازه‌ی خیلی کوچیکشه. این بخش فقط زیر
      ۴۸۰px عرض صفحه (یعنی موبایل، نه لپ‌تاپ) این سایزها رو کمی بزرگ‌تر می‌کنه تا خوانایی
@@ -879,7 +969,11 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
 <header>
   <div class="header-top">
     <div class="weather-chips">{weather_html}</div>
-    <div class="header-name">👋 {user_name}</div>
+    <div class="header-top-left">
+      <button type="button" id="lang-toggle-btn" class="lang-toggle-btn" onclick="toggleOriginalLang()"
+              title="بین تیتر ترجمه‌شده فارسی و متن اصلی هر خبر سوییچ کن">🌐 نمایش زبان اصلی خبرها</button>
+      <div class="header-name">👋 {user_name}</div>
+    </div>
   </div>
   <h1>📊 خلاصه اخبار</h1>
   <p>{now_str}</p>
@@ -897,6 +991,29 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   {columns_html}
 </div>
 <footer>این گزارش به‌صورت خودکار توسط اسکریپت شخصی و Gemini API تولید شده و جایگزین منابع خبری رسمی یا مشاوره مالی نیست.</footer>
+<script>
+  // دکمه‌ی سراسری «نمایش زبان اصلی»: کلاس show-original رو رو body toggle می‌کنه که با
+  // CSS بالا (.title-fa / .title-orig) بین تیتر فارسی و تیتر اصلی هر خبر سوییچ می‌کنه.
+  // انتخاب کاربر تو localStorage همین مرورگر ذخیره می‌شه تا دفعه‌ی بعد که همین صفحه رو
+  // باز می‌کنه (یا گزارش ساعت بعد رو) دوباره مجبور نشه هر بار کلیک کنه.
+  function toggleOriginalLang() {{
+    var isOriginal = document.body.classList.toggle('show-original');
+    var btn = document.getElementById('lang-toggle-btn');
+    if (btn) {{
+      btn.textContent = isOriginal ? '🌐 نمایش ترجمه فارسی' : '🌐 نمایش زبان اصلی خبرها';
+    }}
+    try {{ localStorage.setItem('newsDigestShowOriginalLang', isOriginal ? '1' : '0'); }} catch (e) {{}}
+  }}
+  (function () {{
+    try {{
+      if (localStorage.getItem('newsDigestShowOriginalLang') === '1') {{
+        document.body.classList.add('show-original');
+        var btn = document.getElementById('lang-toggle-btn');
+        if (btn) {{ btn.textContent = '🌐 نمایش ترجمه فارسی'; }}
+      }}
+    }} catch (e) {{}}
+  }})();
+</script>
 </body>
 </html>"""
 

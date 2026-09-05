@@ -100,9 +100,10 @@ jobs:
         run: |
           mkdir -p pages_output
           cp output/latest.html pages_output/index.html
-          # فونت Vazirmatn سلف‌هاست‌شده (assets/fonts) هم باید کنار index.html منتشر بشه،
-          # وگرنه CSS داخل گزارش که به مسیر نسبی assets/fonts/... اشاره می‌کنه رو
-          # GitHub Pages به ۴۰۴ می‌خوره و گزارش دوباره به فونت fallback سیستم برمی‌گرده.
+          # فونت سلف‌هاست‌شده (فعلا Estedad، هرچی که در آینده جایگزینش بشه - assets/fonts)
+          # هم باید کنار index.html منتشر بشه، وگرنه CSS داخل گزارش که به مسیر نسبی
+          # assets/fonts/... اشاره می‌کنه رو GitHub Pages به ۴۰۴ می‌خوره و گزارش دوباره
+          # به فونت fallback سیستم برمی‌گرده.
           cp -r assets pages_output/assets
 
       - name: Upload to GitHub Pages

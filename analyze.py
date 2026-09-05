@@ -9,6 +9,7 @@
 
 import json
 import logging
+import re
 import time
 import requests
 
@@ -86,8 +87,33 @@ def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = 2000) -
 def _format_items_for_prompt(items):
     lines = []
     for i, it in enumerate(items, 1):
-        lines.append(f"{i}. [{it['source']}] {it['title']}\n   خلاصه اولیه: {it['summary'][:300]}\n   لینک: {it['link']}")
+        # tag (مثلا "دیدگاه رسمی داخل ایران") وقتی موجوده اضافه می‌شه تا مدل موقع نوشتن
+        # «مقایسه منابع» واقعا از دیدگاه توصیف‌شده‌ی هر منبع خبر داشته باشه، نه فقط اسمش.
+        tag = it.get("tag", "")
+        source_label = f"{it['source']} - {tag}" if tag else it["source"]
+        lines.append(f"{i}. [{source_label}] {it['title']}\n   خلاصه اولیه: {it['summary'][:300]}\n   لینک: {it['link']}")
     return "\n\n".join(lines)
+
+
+def _parse_category_json(raw: str) -> dict:
+    """
+    مدل (Gemini/Claude) قرار بود دقیقا یک JSON خالص برگردونه، ولی گاهی این‌کار رو کامل
+    انجام نمی‌ده: مثلا کد-بلاک markdown (```json ... ```) دورش می‌ذاره، یا قبل/بعدش یک
+    جمله‌ی اضافه می‌نویسه با این‌که ازش خواسته شده این‌کارو نکنه. json.loads خام روی هرکدوم
+    از این حالت‌ها می‌شکست و کل دسته (نه فقط یک خبر) به حالت خطا/تیتر انگلیسی‌ترجمه‌نشده
+    می‌رفت. اینجا اول تلاش مستقیم می‌شه؛ اگه شکست خورد، بزرگ‌ترین بلوک {...} داخل متن با
+    regex پیدا و دوباره پارس می‌شه - این خیلی از این خرابی‌های جزئی و قابل‌جبران رو حل می‌کنه.
+    """
+    raw_clean = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        return json.loads(raw_clean)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    match = re.search(r"\{.*\}", raw_clean, re.DOTALL)
+    if match:
+        return json.loads(match.group(0))
+    raise ValueError("پاسخ مدل هیچ بلوک JSON قابل‌شناسایی‌ای نداشت.")
 
 
 def summarize_category(category: str, items: list) -> dict:
@@ -119,9 +145,14 @@ def summarize_category(category: str, items: list) -> dict:
     user_prompt = f"دسته خبری: {category}\n\nاخبار جمع‌آوری‌شده (به ترتیب شماره):\n\n{_format_items_for_prompt(items)}"
 
     try:
-        raw = _call_llm(system_prompt, user_prompt, max_tokens=3000)
-        raw_clean = raw.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(raw_clean)
+        # نکته مهم (اصلاح باگ): max_tokens قبلا ۳۰۰۰ بود که برای دسته‌هایی با ۱۰ خبر
+        # (HEADLINES_PER_CATEGORY) - هرکدوم با تیتر ترجمه‌شده + یک تحلیل ۱-۲ جمله‌ای -
+        # بعضی‌وقت‌ها ناکافی بود؛ پاسخ JSON وسط راه truncate می‌شد و json.loads می‌شکست،
+        # و در نتیجه *کل* دسته (حتی خبرهایی که ترجمه‌شون کامل تولید شده بود) به حالت
+        # fallback زیر می‌رفت و کاربر تیترهای انگلیسی‌ترجمه‌نشده می‌دید. سقف بالاتر رفته
+        # تا این truncation کمتر اتفاق بیفته.
+        raw = _call_llm(system_prompt, user_prompt, max_tokens=4500)
+        parsed = _parse_category_json(raw)
         # اطمینان از اینکه طول آرایه‌ها درسته - اگه نه، با مقدار پیش‌فرض پر می‌کنیم
         analyses = parsed.get("item_analyses", [])
         while len(analyses) < len(items):

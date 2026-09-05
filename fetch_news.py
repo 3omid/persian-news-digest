@@ -118,9 +118,20 @@ def fetch_all(db_path: str = None):
 
                     category_items.append({
                         "title": title,
+                        # نسخه‌ی اصلی و دست‌نخورده‌ی تیتر (قبل از هر ترجمه‌ای که analyze.py
+                        # ممکنه روی "title" انجام بده) - برای دکمه‌ی سراسری «نمایش زبان اصلی»
+                        # تو گزارش نگه داشته می‌شه تا کاربر بتونه هر خبر رو به زبان اصلی‌ش هم ببینه.
+                        "title_original": title,
                         "link": link,
                         "summary": summary,
                         "source": src["name"],
+                        # نکته مهم (اصلاح باگ): config.py برای هر منبع یک "tag" توصیفی
+                        # (مثلا "دیدگاه رسمی داخل ایران" یا "دیدگاه منتقد/خارج از کشور")
+                        # تعریف کرده بود دقیقا برای این‌که Claude/Gemini در بخش «مقایسه
+                        # منابع» تفاوت دیدگاه‌ها رو تشخیص بده - ولی این فیلد قبلا اصلا به
+                        # آیتم خبر منتقل نمی‌شد و در نتیجه هیچ‌وقت به analyze.py نمی‌رسید؛
+                        # مدل فقط می‌تونست از روی اسم منبع حدس بزنه. الان مستقیم منتقل می‌شه.
+                        "tag": src.get("tag", ""),
                         "published": pub_time.isoformat() if pub_time else first_seen_str,
                         "published_dt": pub_time or first_seen_dt,
                         "is_new": is_new,
