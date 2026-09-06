@@ -1198,7 +1198,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     <div class="weather-chips">{weather_html}</div>
     <div class="header-top-left">
       <button type="button" id="lang-toggle-btn" class="lang-toggle-btn" onclick="toggleOriginalLang()"
-              title="نمایش خبرها به زبان اصلی (انگلیسی)">EN</button>
+              title="نمایش تیتر هر خبر به زبان اصلی‌اش (فقط تیترها، نه کل صفحه)">🌐 اصلی</button>
       <div class="header-name">👋 {user_name}</div>
     </div>
   </div>
@@ -1253,12 +1253,19 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   // CSS بالا (.title-fa / .title-orig) بین تیتر فارسی و تیتر اصلی هر خبر سوییچ می‌کنه.
   // انتخاب کاربر تو localStorage همین مرورگر ذخیره می‌شه تا دفعه‌ی بعد که همین صفحه رو
   // باز می‌کنه (یا گزارش ساعت بعد رو) دوباره مجبور نشه هر بار کلیک کنه.
+  // نکته مهم (اصلاح باگ گزارش‌شده توسط کاربر): قبلا این دکمه فقط 'EN'/'FA' نشون می‌داد که
+  // انتظار غلط ایجاد می‌کرد - کاربر فکر می‌کرد کل صفحه (سرتیتر، بخش‌های تحلیلی، برچسب‌ها و
+  // غیره) باید به انگلیسی عوض بشه، در حالی که این دکمه از اول فقط تیتر خودِ خبرها رو (بین
+  // ترجمه‌ی فارسی و متن اصلی زبان مبدا) سوییچ می‌کنه، نه کل صفحه رو. برچسب به 'اصلی'/'فارسی'
+  // عوض شد تا با عملکرد واقعی‌ش هم‌خوانی داشته باشه و گمراه‌کننده نباشه.
   function toggleOriginalLang() {{
     var isOriginal = document.body.classList.toggle('show-original');
     var btn = document.getElementById('lang-toggle-btn');
     if (btn) {{
-      btn.textContent = isOriginal ? 'FA' : 'EN';
-      btn.title = isOriginal ? 'نمایش خبرها به فارسی' : 'نمایش خبرها به زبان اصلی (انگلیسی)';
+      btn.textContent = isOriginal ? '🌐 فارسی' : '🌐 اصلی';
+      btn.title = isOriginal
+        ? 'نمایش تیتر خبرها به ترجمه‌ی فارسی'
+        : 'نمایش تیتر هر خبر به زبان اصلی‌اش (فقط تیترها، نه کل صفحه)';
     }}
     try {{ localStorage.setItem('newsDigestShowOriginalLang', isOriginal ? '1' : '0'); }} catch (e) {{}}
   }}
@@ -1267,7 +1274,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
       if (localStorage.getItem('newsDigestShowOriginalLang') === '1') {{
         document.body.classList.add('show-original');
         var btn = document.getElementById('lang-toggle-btn');
-        if (btn) {{ btn.textContent = 'FA'; btn.title = 'نمایش خبرها به فارسی'; }}
+        if (btn) {{ btn.textContent = '🌐 فارسی'; btn.title = 'نمایش تیتر خبرها به ترجمه‌ی فارسی'; }}
       }}
     }} catch (e) {{}}
   }})();
