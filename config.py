@@ -114,6 +114,19 @@ RSS_SOURCES = {
          "tag": "immigration official"},
         {"name": "Immigration.ca Blog", "url": "https://www.immigration.ca/feed/", "tag": "immigration - TO VERIFY"},
         {"name": "Moving2Canada", "url": "https://moving2canada.com/feed/", "tag": "immigration - TO VERIFY"},
+        # درخواست کاربر: منابع بالا عمدتا اخبار مهاجرت «معمولی» (اقامت دائم، ویزای کار/
+        # تحصیل، Express Entry) رو پوشش می‌دن و به‌ندرت به اخبار پناهندگی/رفیوجی کلایمنت
+        # (refugee claimant / asylum seeker) می‌رسن. «refugee claimant» اصطلاح رسمی و
+        # رایج حقوقی/رسانه‌ای خودِ کانادا برای پناهجوهاست (به‌جای «immigrant» عمومی)، برای
+        # همین به‌جای فید ثابت (که ممکنه اصلا این کلمه رو نداشته باشه)، از جستجوی زنده‌ی
+        # گوگل نیوز روی همین عبارت استفاده می‌کنیم - دقیقا شبیه همون تکنیکی که «Reuters
+        # World (via Google News)» تو دسته‌ی «جنگ ایران» استفاده می‌کنه. "when:4d" یعنی
+        # فقط خبرهای ۴ روز اخیر (هم‌راستا با DISPLAY_LOOKBACK_HOURS=96) برگردونده بشه تا
+        # خبر بی‌ربط/قدیمی کمتر بیاد؛ اگه هیچ خبر تازه‌ای نباشه، این منبع فقط اون روز خالی
+        # می‌مونه (مثل هر منبع دیگه‌ای که خبر نداره)، نه این‌که خطا بده.
+        {"name": "گوگل نیوز - اخبار پناهندگی/رفیوجی کلایمنت کانادا",
+         "url": "https://news.google.com/rss/search?q=%22refugee+claimant%22+Canada+when:4d&hl=en-CA&gl=CA&ceid=CA:en",
+         "tag": "refugee claimant / asylum news"},
     ],
     "فناوری و IT": [
         {"name": "TechCrunch", "url": "https://techcrunch.com/feed/", "tag": "tech"},
