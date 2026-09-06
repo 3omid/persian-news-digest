@@ -293,6 +293,101 @@ def stock_market_analysis(stock_movers: list) -> str:
         return ""
 
 
+def daily_extras(recent: dict = None) -> dict:
+    """
+    بسته‌ی «محتوای جانبی» تازه‌ی هر اجرا - درخواست کاربر: هر بار گزارش می‌ره (هر ساعت)، این
+    بخش‌ها عوض بشن و تکراری نباشن:
+      - tip: یک نکته‌ی آموزشی کوتاه (اقتصادی/مالی/هر موضوع مفید دیگه).
+      - quiz: یک تست چهارگزینه‌ای هوش/دانش عمومی با پاسخ و توضیح، برای تعامل خواننده
+        (کلیک روی گزینه‌ها و دیدن بلادرنگ درست/غلط، تو generate_report.py با JS خالص انجام می‌شه).
+      - quote: یک جمله‌ی معنادار و معروف از یکی از بزرگان دنیا، با نام گوینده.
+      - poem: یک یا دو بیت شعر فارسیِ معروف و معنادار (سعدی/حافظ/مولانا/عطار/فردوسی/خیام)، با نام شاعر.
+    قبلا فقط «نکته آموزشی» وجود داشت و اونم یک لیست ثابت (config.MARKET_EDUCATION_TIPS) بود که
+    بر اساس روز سال می‌چرخید - یعنی در یک روز با اجرای ساعتی (~۲۴بار) دقیقا همون یک نکته
+    عینا تکرار می‌شد. الان یک فراخوانی LLM همه‌ی این ۴ بخش رو تازه تولید می‌کنه؛ recent
+    (دیکشنری با کلیدهای tip/quiz/quote/poem، هرکدوم لیستی از fetch_news.get_recent_extras)
+    به مدل داده می‌شه تا از موضوعات/سوال‌ها/جمله‌های قبلی فاصله بگیره.
+    خروجی: {"tip": {...} یا خالی, "quiz": {...} یا خالی, "quote": {...} یا خالی, "poem": {...} یا خالی}
+    هر بخش که تولیدش شکست بخوره یا ناقص باشه، دیکشنری خالی برمی‌گرده (صدازننده باید graceful
+    باهاش رفتار کنه - مثلا tip به لیست ثابت قدیمی fallback می‌کنه، بقیه ساده نمایش داده نمی‌شن).
+    """
+    recent = recent or {}
+
+    def _fmt(key, label):
+        items = recent.get(key) or []
+        return f"{label}:\n" + ("، ".join(items) if items else "(قبلا موردی ثبت نشده)")
+
+    system_prompt = (
+        "تو دستیار تولید محتوای جانبی برای یک گزارش خبری/اقتصادی خودکار (فارسی) هستی. باید "
+        "دقیقا ۴ بخش زیر رو تولید کنی و فقط و فقط یک JSON خالص به این فرمت برگردونی، بدون "
+        "هیچ متن یا توضیح اضافه قبل/بعدش:\n"
+        '{"tip": {"topic": "عنوان کوتاه (۳-۶ کلمه)", "text": "نکته آموزشی ۳-۵ جمله‌ای"}, '
+        '"quiz": {"question": "متن سوال", "options": ["گزینه ۱", "گزینه ۲", "گزینه ۳", "گزینه ۴"], '
+        '"correct_index": 0, "explanation": "یک جمله کوتاه که چرا این گزینه درسته"}, '
+        '"quote": {"text": "متن جمله", "author": "نام گوینده"}, '
+        '"poem": {"lines": ["مصرع یا بیت اول", "مصرع یا بیت دوم"], "poet": "نام شاعر"}}\n\n'
+        "قوانین هر بخش:\n"
+        "- tip: نکته‌ای درباره اقتصاد، سواد مالی، تاریخچه پول/بانکداری/بازارها، یا هر دانش "
+        "عمومی مفید دیگه. هرگز توصیه‌ی مشخص خرید/فروش نده. لحن ساده و صمیمی، بدون مقدمه‌چینی کلیشه‌ای.\n"
+        "- quiz: یک سوال تستی چهارگزینه‌ای جالب (دانش عمومی، تاریخ، علمی، یا اقتصادی) با دقیقا "
+        "۴ گزینه‌ی متفاوت؛ correct_index عددی بین ۰ تا ۳ (اندیس گزینه‌ی درست در آرایه options)؛ "
+        "explanation باید واقعا توضیح بده چرا اون گزینه درسته.\n"
+        "- quote: یک جمله‌ی کوتاه، معروف و واقعی (نه ساختگی) از یکی از بزرگان تاریخ/علم/ادبیات "
+        "دنیا (هر ملیتی)، به همراه نام دقیق گوینده.\n"
+        "- poem: یک یا دو بیتِ واقعی و معروف از یکی از شاعران کلاسیک فارسی (سعدی، حافظ، مولانا، "
+        "عطار، فردوسی، یا خیام) که معنادار و شناخته‌شده باشه - هر مصرع/بیت یک آیتم جدا در آرایه "
+        "lines. هرگز شعر ساختگی یا نادرست به یک شاعر نسبت نده.\n\n"
+        "هیچ‌کدوم از این ۴ مورد نباید با موارد فهرست‌شده در پیام کاربر (که قبلا استفاده شدن) یکسان یا خیلی شبیه باشه."
+    )
+    user_prompt = "\n\n".join([
+        _fmt("tip", "موضوع نکته‌های آموزشی قبلی"),
+        _fmt("quiz", "سوال‌های تست قبلی"),
+        _fmt("quote", "جمله‌های معروف قبلی"),
+        _fmt("poem", "مصرع/بیت‌های شعر قبلی"),
+    ]) + "\n\nبرای هر ۴ بخش، یک مورد کاملا تازه و متفاوت از لیست‌های بالا تولید کن."
+
+    empty = {"tip": {}, "quiz": {}, "quote": {}, "poem": {}}
+    try:
+        raw = _call_llm(system_prompt, user_prompt, max_tokens=1200)
+        parsed = _parse_category_json(raw)
+    except Exception as e:
+        log.error(f"خطا در تولید محتوای جانبی روزانه: {e}")
+        return empty
+
+    result = dict(empty)
+
+    tip = parsed.get("tip") or {}
+    topic, text = (tip.get("topic") or "").strip(), (tip.get("text") or "").strip()
+    if topic and text:
+        result["tip"] = {"topic": topic, "text": text}
+
+    quiz = parsed.get("quiz") or {}
+    question = (quiz.get("question") or "").strip()
+    options = quiz.get("options") or []
+    correct_index = quiz.get("correct_index")
+    explanation = (quiz.get("explanation") or "").strip()
+    if (question and isinstance(options, list) and len(options) == 4
+            and all(isinstance(o, str) and o.strip() for o in options)
+            and isinstance(correct_index, int) and 0 <= correct_index <= 3 and explanation):
+        result["quiz"] = {
+            "question": question, "options": [o.strip() for o in options],
+            "correct_index": correct_index, "explanation": explanation,
+        }
+
+    quote = parsed.get("quote") or {}
+    q_text, q_author = (quote.get("text") or "").strip(), (quote.get("author") or "").strip()
+    if q_text and q_author:
+        result["quote"] = {"text": q_text, "author": q_author}
+
+    poem = parsed.get("poem") or {}
+    lines = poem.get("lines") or []
+    poet = (poem.get("poet") or "").strip()
+    if poet and isinstance(lines, list) and lines and all(isinstance(l, str) and l.strip() for l in lines):
+        result["poem"] = {"lines": [l.strip() for l in lines], "poet": poet}
+
+    return result
+
+
 def periodic_top_news(history_items: list, period_label: str) -> str:
     """
     خلاصه «مهم‌ترین اخبار» برای یک بازه (روز/هفته/ماه) بر اساس تاریخچه دیتابیس.

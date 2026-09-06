@@ -145,6 +145,27 @@ def main():
 
     rollups = maybe_periodic_rollups() if not args.category else {}
 
+    # بسته‌ی محتوای جانبیِ تازه‌ی همین اجرا: نکته آموزشی + تست چهارگزینه‌ای + جمله بزرگان +
+    # بیت شعر فارسی (درخواست کاربر: هر بار گزارش می‌ره، این‌ها جدید و غیرتکراری باشن). تاریخچه‌ی
+    # هرکدوم رو جدا به مدل می‌دیم تا موضوع/سوال/جمله‌ی تازه‌ای انتخاب کنه؛ اگه تولید یک بخش
+    # شکست بخوره یا ناقص باشه، خالی می‌مونه و generate_report خودش با fallback (برای tip) یا
+    # حذف اون بخش (برای quiz/quote/poem) رفتار می‌کنه - گزارش هیچ‌وقت به‌خاطر این بخش‌ها نمی‌شکنه.
+    recent_extras = {
+        "tip": fetch_news.get_recent_extras("tip"),
+        "quiz": fetch_news.get_recent_extras("quiz"),
+        "quote": fetch_news.get_recent_extras("quote"),
+        "poem": fetch_news.get_recent_extras("poem"),
+    }
+    extras = analyze.daily_extras(recent_extras)
+    if extras.get("tip"):
+        fetch_news.save_extra("tip", extras["tip"].get("topic", ""))
+    if extras.get("quiz"):
+        fetch_news.save_extra("quiz", extras["quiz"].get("question", ""))
+    if extras.get("quote"):
+        fetch_news.save_extra("quote", extras["quote"].get("text", ""))
+    if extras.get("poem"):
+        fetch_news.save_extra("poem", (extras["poem"].get("lines") or [""])[0])
+
     log.info("ساخت گزارش HTML...")
     report_path = generate_report.build_report(
         category_analyses, currencies, iran_usd_toman, forecast_text, political_text,
@@ -152,7 +173,8 @@ def main():
         crypto_market=crypto_market, crypto_text=crypto_text, stock_movers=stock_movers,
         weather_data=weather_data, rollups=rollups, usd_change_percent=usd_change_percent,
         stocks_text=stocks_text, iran_usd_toman_series=iran_usd_toman_series,
-        gold_coin_series=gold_coin_series,
+        gold_coin_series=gold_coin_series, tip=extras.get("tip"), quiz=extras.get("quiz"),
+        quote=extras.get("quote"), poem=extras.get("poem"),
     )
     log.info(f"گزارش ساخته شد: {report_path}")
 
@@ -172,6 +194,20 @@ def main():
             body = html.escape(_smart_truncate(summary, 280))
         lines.append(f"{icon} <b>{cat_esc}</b>\n{body}")
     short_summary = "📰 <b>خلاصه اخبار</b>\n\n" + "\n\n➖➖➖➖➖\n\n".join(lines)
+
+    tip, quote, poem = extras.get("tip"), extras.get("quote"), extras.get("poem")
+    if tip and tip.get("text"):
+        tip_topic_esc = html.escape(tip.get("topic", ""))
+        tip_text_esc = html.escape(_smart_truncate(tip["text"], 320))
+        short_summary += f"\n\n➖➖➖➖➖\n\n🎓 <b>نکته آموزشی: {tip_topic_esc}</b>\n{tip_text_esc}"
+    if quote and quote.get("text"):
+        q_text_esc = html.escape(quote["text"])
+        q_author_esc = html.escape(quote.get("author", ""))
+        short_summary += f"\n\n➖➖➖➖➖\n\n💬 «{q_text_esc}»\n<i>- {q_author_esc}</i>"
+    if poem and poem.get("lines"):
+        poem_lines_esc = "\n".join(html.escape(l) for l in poem["lines"])
+        poet_esc = html.escape(poem.get("poet", ""))
+        short_summary += f"\n\n➖➖➖➖➖\n\n📜 {poem_lines_esc}\n<i>- {poet_esc}</i>"
 
     # سایت/گزارش HTML همیشه بالا (این تابع) ساخته و منتشر می‌شه، ولی پیام تلگرام فقط وقتی
     # حداقل یک خبر *واقعا* تازه باشه (یا با --force) ارسال می‌شه - دقیقا همون طراحی اصلی

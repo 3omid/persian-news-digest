@@ -190,6 +190,53 @@ def get_history(hours: int, db_path: str = None):
     return rows
 
 
+def _init_extras_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sent_extras (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            key_text TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+
+
+def get_recent_extras(kind: str, limit: int = 40, db_path: str = None):
+    """
+    عنوان/متن کوتاه آخرین موردهای «جانبی» ارسال‌شده از یک نوع مشخص (kind: tip / quiz /
+    quote / poem) رو برمی‌گردونه. این لیست به analyze.daily_extras() داده می‌شه تا مدل
+    موضوع تازه و متفاوتی انتخاب کنه و هیچ‌کدوم از این بخش‌ها تو گزارش‌های پی‌درپی (هر
+    ساعت) تکراری نباشن - همون درخواست کاربر ("هر دفعه گزارش می‌دی یه چیز جدید باشه،
+    تکراری نباشه"). از همون seen_news.db استفاده می‌کنه (که در ورک‌فلو بین اجراهای ساعتی
+    cache و بازیابی می‌شه) پس تاریخچه بین اجراهای مختلف GitHub Actions هم حفظ می‌شه.
+    """
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(db_path)
+    _init_extras_table(conn)
+    cur = conn.execute(
+        "SELECT key_text FROM sent_extras WHERE kind = ? ORDER BY id DESC LIMIT ?", (kind, limit)
+    )
+    items = [r[0] for r in cur.fetchall() if r[0]]
+    conn.close()
+    return items
+
+
+def save_extra(kind: str, key_text: str, db_path: str = None):
+    """یک آیتم «جانبی» تازه (نکته/تست/جمله/شعر) که همین اجرا تولید شده رو ثبت می‌کنه تا تکرار نشه."""
+    if not kind or not key_text:
+        return
+    db_path = db_path or config.DB_PATH
+    conn = sqlite3.connect(db_path)
+    _init_extras_table(conn)
+    conn.execute(
+        "INSERT INTO sent_extras (kind, key_text, created_at) VALUES (?, ?, ?)",
+        (kind, key_text, datetime.now(timezone.utc).isoformat()),
+    )
+    conn.commit()
+    conn.close()
+
+
 if __name__ == "__main__":
     data = fetch_all()
     for cat, items in data.items():

@@ -19,6 +19,51 @@ import matplotlib.pyplot as plt
 import config
 from jalali import format_dual_date, to_persian_digits
 
+_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fonts")
+_FONT_WEIGHTS = [
+    ("light", "300"),
+    ("regular", "400"),
+    ("semibold", "500 600"),
+    ("bold", "700"),
+    ("black", "800 900"),
+]
+
+
+def _embedded_font_face_css() -> str:
+    """
+    فونت‌های Noto Sans Arabic رو به‌جای آدرس‌دهی نسبی (assets/fonts/...)، مستقیم به‌صورت
+    base64 (data URI) داخل خودِ CSS جاسازی می‌کنه. علت این تغییر: گزارش HTML وقتی از روی
+    خودِ سایت (GitHub Pages) باز بشه مشکلی نداره چون پوشه‌ی assets کنارش هست، ولی وقتی همین
+    فایل HTML به‌صورت مستقل باز بشه - دقیقا حالتی که تلگرام پیش میاره (فقط خودِ فایل رو
+    به‌عنوان سند می‌فرسته، بدون پوشه‌ی assets) - مسیر نسبی فونت پیدا نمی‌شه و مرورگر (مثلا
+    سافاری رو آیفون) به فونت پیش‌فرض بی‌کیفیت سیستم fallback می‌کنه. جاسازی base64 این
+    وابستگی به مسیر/پوشه‌ی کنار فایل رو کاملا حذف می‌کنه: فونت همیشه داخل خودِ بایت‌های
+    HTML هست، چه از وب چه از تلگرام چه هر جای دیگه باز بشه. اگه یک فایل فونت به هر دلیلی
+    پیدا نشه، فقط همون وزن رو نادیده می‌گیریم (نه این‌که کل گزارش رو با یک exception خراب
+    کنیم).
+    نکته: این جاسازی base64 فقط ظاهر این فایل HTML/سایت رو عوض می‌کنه؛ اپ تلگرام (روی
+    آیفون/اندروید) پیام‌های متنی معمولی رو همیشه با فونت خودِ سیستم/اپ نشون می‌ده و هیچ
+    فونتی از گزارش رو اعمال نمی‌کنه - این محدودیتِ خودِ تلگرام و خارج از کنترل این پروژه‌ست.
+    """
+    blocks = []
+    for name, weight in _FONT_WEIGHTS:
+        path = os.path.join(_FONT_DIR, f"notosansarabic-{name}.woff")
+        try:
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("ascii")
+        except OSError:
+            continue
+        blocks.append(f"""
+  @font-face {{
+    font-family: 'Noto Sans Arabic';
+    font-style: normal;
+    font-weight: {weight};
+    font-display: swap;
+    src: url('data:font/woff;base64,{b64}') format('woff');
+  }}""")
+    return "".join(blocks)
+
+
 CATEGORY_STYLE = {
     "اقتصادی": {"icon": "💰", "color": "#1f3864"},
     "سیاسی داخلی": {"icon": "🏛️", "color": "#6c4f8c"},
@@ -596,6 +641,85 @@ def _market_education_tip():
     """
 
 
+def _daily_tip_html(tip: dict = None) -> str:
+    """
+    نکته‌ی آموزشی تازه‌ی همین اجرا (analyze.daily_tip، از main.py) رو نشون می‌ده - درخواست
+    کاربر: هر بار گزارش ساخته می‌شه، نکته‌ای متفاوت و غیرتکراری داشته باشه، نه اینکه (مثل
+    _market_education_tip قدیمی) یک لیست ثابت رو بر اساس روز سال بچرخونه و تو یک روز با
+    اجرای ساعتی دقیقا همون یک نکته ۲۴ بار تکرار بشه. اگه تولید نکته‌ی تازه به هر دلیلی (خطای
+    موقت API) شکست بخورده و tip خالی برسه، به همون لیست ثابت قدیمی fallback می‌کنیم تا
+    گزارش هیچ‌وقت بدون این بخش نمونه.
+    """
+    if tip and tip.get("text"):
+        topic = html_lib.escape(tip.get("topic", "").strip())
+        label = f"نکته آموزشی: {topic}" if topic else "نکته آموزشی"
+        return f"""
+        <div class="note-card teal">
+          <div class="note-label">🎓 <strong>{label}</strong></div>
+          {_md(tip["text"])}
+        </div>
+        """
+    return _market_education_tip()
+
+
+def _quiz_html(quiz: dict = None) -> str:
+    """
+    تست چهارگزینه‌ای تازه‌ی همین اجرا (analyze.daily_extras) - درخواست کاربر: یک تست چهارگزینه
+    که با کلیک روی هر گزینه، همون‌جا (بدون رفرش صفحه) بگه درست زده یا غلط، و گزینه‌ی درست رو
+    هم نشون بده. کاملا با CSS+JS خالص کار می‌کنه، هیچ درخواستی به سرور نمی‌زنه. اگه quiz خالی
+    باشه (تولیدش شکست خورده)، این بخش کلا از گزارش حذف می‌شه - نه یه‌جای خالی/خراب.
+    """
+    if not quiz or not quiz.get("question") or len(quiz.get("options") or []) != 4:
+        return ""
+    question = html_lib.escape(quiz["question"])
+    options = [html_lib.escape(o) for o in quiz["options"]]
+    explanation = html_lib.escape(quiz.get("explanation", ""))
+    correct_index = quiz.get("correct_index", 0)
+    options_html = "".join(
+        f'<button type="button" class="quiz-option" data-index="{i}" onclick="checkDailyQuiz(this)">{opt}</button>'
+        for i, opt in enumerate(options)
+    )
+    return f"""
+    <div class="note-card blue quiz-box" id="daily-quiz" data-correct="{correct_index}">
+      <div class="note-label">🧠 <strong>تست هوش این ساعت</strong></div>
+      <p class="quiz-question">{question}</p>
+      <div class="quiz-options">{options_html}</div>
+      <div class="quiz-result" id="quiz-result"></div>
+      <div class="quiz-explanation" id="quiz-explanation">💡 {explanation}</div>
+    </div>
+    """
+
+
+def _quote_html(quote: dict = None) -> str:
+    """جمله‌ی معروفِ تازه‌ی همین اجرا از یکی از بزرگان دنیا - اگه تولیدش شکست خورده باشه، بخش کلا حذف می‌شه."""
+    if not quote or not quote.get("text") or not quote.get("author"):
+        return ""
+    text = html_lib.escape(quote["text"])
+    author = html_lib.escape(quote["author"])
+    return f"""
+    <div class="note-card rose">
+      <div class="note-label">💬 <strong>سخن بزرگان</strong></div>
+      <p class="quote-text">«{text}»</p>
+      <p class="quote-author">— {author}</p>
+    </div>
+    """
+
+
+def _poem_html(poem: dict = None) -> str:
+    """یک یا دو بیت شعر فارسیِ تازه‌ی همین اجرا - اگه تولیدش شکست خورده باشه، بخش کلا حذف می‌شه."""
+    if not poem or not poem.get("lines") or not poem.get("poet"):
+        return ""
+    lines_html = "".join(f'<div class="poem-line">{html_lib.escape(l)}</div>' for l in poem["lines"])
+    poet = html_lib.escape(poem["poet"])
+    return f"""
+    <div class="note-card sepia">
+      <div class="note-label">📜 <strong>شعر</strong></div>
+      <div class="poem-lines">{lines_html}</div>
+      <p class="quote-author">— {poet}</p>
+    </div>
+    """
+
+
 def _render_news_item(it, accent_color, item_analysis, number):
     dual_date = format_dual_date(it.get("published_dt_obj")) if it.get("published_dt_obj") else ""
     new_badge = '<span class="badge-new">جدید</span>' if it.get("is_new") else ""
@@ -664,7 +788,8 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
                   gold_coin_prices=None, crypto_market=None, crypto_text: str = "",
                   stock_movers=None, weather_data=None, rollups: dict = None, output_dir: str = None,
                   usd_change_percent=None, stocks_text: str = "",
-                  iran_usd_toman_series=None, gold_coin_series=None) -> str:
+                  iran_usd_toman_series=None, gold_coin_series=None, tip: dict = None,
+                  quiz: dict = None, quote: dict = None, poem: dict = None) -> str:
     output_dir = output_dir or config.OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
     rollups = rollups or {}
@@ -721,7 +846,10 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     gold_html, gold_overlays_html = _gold_coin_section(gold_coin_prices or {}, gold_coin_resampled)
     crypto_html = _crypto_section(crypto_market or [], crypto_text)
     stocks_html = _stocks_section(stock_movers or [], stocks_text=stocks_text)
-    market_tip_html = _market_education_tip()
+    market_tip_html = _daily_tip_html(tip)
+    quiz_html = _quiz_html(quiz)
+    quote_html = _quote_html(quote)
+    poem_html = _poem_html(poem)
 
     rollup_html = "".join(
         f'<div class="note-card purple"><div class="note-label">📌 <strong>مهم‌ترین اخبار {label}</strong></div>{_md(text)}</div>'
@@ -792,49 +920,24 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>خلاصه اخبار - {now_str}</title>
 <style>
-  /* فونت Vazirmatn سلف‌هاست‌شده - تاریخچه‌ی فونت این پروژه: Vazirmatn (اولیه) → Sahel
-     (کاربر گفت زیبا نبود) → Estedad (درخواست بعدی، ظاهر هندسی‌تر) → و حالا دوباره
-     Vazirmatn طبق درخواست صریح کاربر (rastikerdar.github.io/vazirmatn/fa). Vazirmatn یک
-     فونت فارسی/عربی کاملا رایگان و متن‌باز (SIL OFL 1.1، github.com/rastikerdar/vazirmatn -
-     متن کامل مجوز کنار خود فایل‌ها در assets/fonts/VAZIRMATN-OFL-LICENSE.txt). مثل قبل،
-     خودِ فایل‌های فونت (woff2) داخل مخزن (assets/fonts) قرار گرفته و مستقیم از همون
-     GitHub Pages سرو می‌شه - هیچ وابستگی به دامنه‌ی خارجی نیست، پس رو هر دستگاه/شبکه‌ای
-     دقیقا همون فونتیه که رو کامپیوتر دیده می‌شه. */
-  @font-face {{
-    font-family: 'Vazirmatn';
-    font-style: normal;
-    font-weight: 300;
-    font-display: swap;
-    src: url('assets/fonts/vazirmatn-light.woff2') format('woff2');
-  }}
-  @font-face {{
-    font-family: 'Vazirmatn';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url('assets/fonts/vazirmatn-regular.woff2') format('woff2');
-  }}
-  @font-face {{
-    font-family: 'Vazirmatn';
-    font-style: normal;
-    font-weight: 500 600;
-    font-display: swap;
-    src: url('assets/fonts/vazirmatn-semibold.woff2') format('woff2');
-  }}
-  @font-face {{
-    font-family: 'Vazirmatn';
-    font-style: normal;
-    font-weight: 700;
-    font-display: swap;
-    src: url('assets/fonts/vazirmatn-bold.woff2') format('woff2');
-  }}
-  @font-face {{
-    font-family: 'Vazirmatn';
-    font-style: normal;
-    font-weight: 800 900;
-    font-display: swap;
-    src: url('assets/fonts/vazirmatn-black.woff2') format('woff2');
-  }}
+  /* فونت Noto Sans Arabic - تاریخچه‌ی فونت این پروژه: Vazirmatn (اولیه) → Sahel (کاربر
+     گفت زیبا نبود) → Estedad (درخواست بعدی، ظاهر هندسی‌تر) → دوباره Vazirmatn → و حالا
+     Noto Sans Arabic. علتِ این آخرین تغییر: شکل ارقام فارسی (۰-۹) تو Vazirmatn به‌نظر
+     کاربر زشت بود؛ بررسی شد که نه ویژگی OpenType «ss01» و نه نسخه‌ی جداگانه‌ی
+     «Farsi-Digits» خودِ Vazirmatn، هیچ‌کدوم شکل رقم‌های فارسی رو عوض نمی‌کنن (این دو فقط
+     رقم‌های لاتین ورودی رو به شکل فارسی تبدیل می‌کنن، نه رقم‌های از قبل فارسی رو). فونت‌های
+     خواهرِ همون طراح (Sahel/Samim) هم دقیقا همون شکل رقم رو دارن. به همین خاطر یک مقایسه‌ی
+     زنده بین چند فونت گوگل (Noto Naskh Arabic / Noto Kufi Arabic / Noto Sans Arabic) به
+     کاربر نشون داده شد و Noto Sans Arabic (مدرن، گرد، یوزرفرندلی، کاملا رایگان و پراستفاده
+     تو سایت‌ها) رو خودِ کاربر انتخاب کرد. فونت فارسی/عربی کاملا رایگان و متن‌باز
+     (SIL OFL 1.1، fonts.google.com/noto/specimen/Noto+Sans+Arabic - متن کامل مجوز در
+     assets/fonts/NOTO-SANS-ARABIC-OFL-LICENSE.txt). مثل قبل، به‌جای مسیر نسبی
+     (assets/fonts/...) که فقط رو خودِ سایت (GitHub Pages) کار می‌کنه، با
+     _embedded_font_face_css() به‌صورت base64 مستقیم داخل همین CSS جاسازی می‌شه تا وقتی
+     همین فایل HTML مستقل (مثلا از طریق تلگرام) باز می‌شه هم فونت درست لود بشه - هرچند
+     خودِ اپ تلگرام برای پیام متنی معمولی این فونت رو اصلا اعمال نمی‌کنه (محدودیت تلگرام،
+     نه این گزارش) و فقط وقتی خودِ فایل HTML/سایت باز بشه این فونت دیده می‌شه. */
+  {_embedded_font_face_css()}
   :root {{
     --bg: #eef1f5;
     --card: #ffffff;
@@ -854,7 +957,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     text-size-adjust: 100%;
   }}
   html, body, div, span, h1, h2, h3, p, a, label, summary, input {{
-    font-family: 'Vazirmatn', Tahoma, Arial, sans-serif !important;
+    font-family: 'Noto Sans Arabic', Tahoma, Arial, sans-serif !important;
     /* رندر فونت روی وب‌کیت/سافاری (به‌خصوص آیفون) بدون این پرچم‌ها ضخیم‌تر و
        کم‌کیفیت‌تر از نسخه‌ی دسکتاپ دیده می‌شه. */
     -webkit-font-smoothing: antialiased;
@@ -885,8 +988,9 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
      نمایش‌شون برعکس می‌شه - این‌کارو خود JS پایین صفحه انجام می‌ده. */
   .lang-toggle-btn {{
     background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.35); color: #fff;
-    border-radius: 20px; padding: 5px 13px; font-size: 12px; cursor: pointer; white-space: nowrap;
-    font-family: 'Vazirmatn', Tahoma, Arial, sans-serif;
+    border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 700; letter-spacing: .03em;
+    cursor: pointer; white-space: nowrap; min-width: 34px; text-align: center;
+    font-family: 'Noto Sans Arabic', Tahoma, Arial, sans-serif;
   }}
   .lang-toggle-btn:hover {{ background: rgba(255,255,255,.28); }}
   .title-orig {{ display: none; }}
@@ -940,10 +1044,40 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .note-card.blue {{ background: #eaf1f8; border-color: var(--navy); }}
   .note-card.purple {{ background: #f1ecf6; border-color: #6c4f8c; }}
   .note-card.teal {{ background: #e6f5f2; border-color: #1e8a74; }}
+  .note-card.rose {{ background: #fbe9ee; border-color: #a4425f; }}
+  .note-card.sepia {{ background: #f7f1e6; border-color: #8a6d3b; }}
+
+  /* تست چهارگزینه‌ای هوش - کاملا با CSS+JS خالص، بدون رفت‌وبرگشت به سرور (رجوع کن به
+     checkDailyQuiz در اسکریپت پایین صفحه). */
+  .quiz-question {{ font-weight: 700; margin: 0 0 10px; }}
+  .quiz-options {{ display: flex; flex-direction: column; gap: 7px; margin-bottom: 4px; }}
+  .quiz-option {{
+    display: block; width: 100%; text-align: right; background: #fff; border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 9px 12px; font-size: 13.5px; cursor: pointer;
+    font-family: 'Noto Sans Arabic', Tahoma, Arial, sans-serif; color: var(--text);
+  }}
+  .quiz-option:hover:not(:disabled) {{ border-color: var(--navy); }}
+  .quiz-option:disabled {{ cursor: default; opacity: .75; }}
+  .quiz-option.quiz-correct {{ background: #e5f6ec; border-color: var(--up); color: #14532d; font-weight: 700; }}
+  .quiz-option.quiz-wrong {{ background: #fbeaea; border-color: var(--down); color: #7f1d1d; }}
+  .quiz-result {{ font-weight: 700; font-size: 13.5px; margin-top: 8px; min-height: 0; }}
+  .quiz-result.quiz-result-correct {{ color: var(--up); }}
+  .quiz-result.quiz-result-wrong {{ color: var(--down); }}
+  .quiz-explanation {{ display: none; font-size: 12.5px; color: var(--muted); margin-top: 6px; text-align: justify; text-align-last: right; }}
+
+  /* سخن بزرگان / شعر فارسی */
+  .quote-text {{ font-size: 14px; font-style: italic; margin: 0 0 6px; text-align: justify; text-align-last: center; }}
+  .quote-author {{ font-size: 12px; color: var(--muted); margin: 0; text-align: left; font-weight: 600; }}
+  .poem-lines {{ margin-bottom: 6px; }}
+  .poem-line {{ font-size: 14px; text-align: center; line-height: 1.9; }}
   .note-label {{ font-size: 13.5px; margin-bottom: 6px; }}
 
-  /* متن‌های تولیدشده توسط مدل (خلاصه، پیش‌بینی، تحلیل، گزارش کریپتو) - بعد از تبدیل مارک‌داون به HTML */
-  .note-card p, .summary-box p, .comparison-box p, .card-note p {{ margin: 0 0 8px; }}
+  /* متن‌های تولیدشده توسط مدل (خلاصه، پیش‌بینی، تحلیل، گزارش کریپتو) - بعد از تبدیل مارک‌داون به HTML.
+     درخواست کاربر: متن پاراگراف‌ها به‌جای چسبیدن به راست (پیش‌فرض RTL)، justify (هم‌تراز از
+     هر دو طرف) باشه - دقیقا شبیه چیدمان متن تو ورد/کتاب فارسی. */
+  .note-card p, .summary-box p, .comparison-box p, .card-note p, .analysis-text {{
+    margin: 0 0 8px; text-align: justify; text-align-last: right;
+  }}
   .note-card p:last-child, .summary-box p:last-child, .comparison-box p:last-child, .card-note p:last-child {{ margin-bottom: 0; }}
   .md-list {{ margin: 4px 0 10px; padding-inline-start: 22px; }}
   .md-list:last-child {{ margin-bottom: 0; }}
@@ -1038,7 +1172,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   footer {{ text-align: center; padding: 22px; font-size: 11px; color: var(--muted); }}
 
   /* روی گوشی (به‌خصوص آیفون)، خیلی از متن‌های ریز این صفحه (۱۰.۵ تا ۱۲.۵ پیکسل - برای
-     برچسب قیمت/واحد/منبع خبر/زمان و غیره) با وجود فونت درست (Vazirmatn)، به‌خاطر
+     برچسب قیمت/واحد/منبع خبر/زمان و غیره) با وجود فونت درست (Noto Sans Arabic)، به‌خاطر
      ریزنقشی و پیچیدگی حروف فارسی نسبت به لاتین، در این سایزهای کوچیک کمتر واضح به‌نظر
      می‌رسن - این ربطی به نوع فونت نداره، صرفا اندازه‌ی خیلی کوچیکشه. این بخش فقط زیر
      ۴۸۰px عرض صفحه (یعنی موبایل، نه لپ‌تاپ) این سایزها رو کمی بزرگ‌تر می‌کنه تا خوانایی
@@ -1064,7 +1198,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     <div class="weather-chips">{weather_html}</div>
     <div class="header-top-left">
       <button type="button" id="lang-toggle-btn" class="lang-toggle-btn" onclick="toggleOriginalLang()"
-              title="بین تیتر ترجمه‌شده فارسی و متن اصلی هر خبر سوییچ کن">🌐 نمایش زبان اصلی خبرها</button>
+              title="نمایش خبرها به زبان اصلی (انگلیسی)">EN</button>
       <div class="header-name">👋 {user_name}</div>
     </div>
   </div>
@@ -1079,6 +1213,9 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   {gold_html}
   {gold_overlays_html}
   {market_tip_html}
+  {quiz_html}
+  {quote_html}
+  {poem_html}
   {rollup_html}
   <div class="note-card amber"><div class="note-label">📈 <strong>پیش‌بینی اقتصادی</strong></div>{_md(forecast_text)}</div>
   <div class="note-card blue"><div class="note-label">🏛️ <strong>تحلیل سیاسی</strong></div>{_md(political_text)}</div>
@@ -1086,6 +1223,32 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
 </div>
 <footer>این گزارش به‌صورت خودکار توسط اسکریپت شخصی و Gemini API تولید شده و جایگزین منابع خبری رسمی یا مشاوره مالی نیست.</footer>
 <script>
+  // تست چهارگزینه‌ای هوش: با کلیک روی هر گزینه، بلافاصله (بدون رفرش/درخواست به سرور)
+  // درست یا غلط بودن جواب رو نشون می‌ده، گزینه‌ی درست رو سبز و گزینه‌ی انتخاب‌شده‌ی غلط
+  // رو (اگه اشتباه بود) قرمز می‌کنه، بقیه گزینه‌ها رو غیرفعال می‌کنه تا فقط یک بار بشه
+  // جواب داد، و توضیح کوتاه پاسخ رو نمایش می‌ده.
+  function checkDailyQuiz(btn) {{
+    var quiz = document.getElementById('daily-quiz');
+    if (!quiz || quiz.classList.contains('answered')) return;
+    quiz.classList.add('answered');
+    var correct = parseInt(quiz.getAttribute('data-correct'), 10);
+    var chosen = parseInt(btn.getAttribute('data-index'), 10);
+    var buttons = quiz.querySelectorAll('.quiz-option');
+    buttons.forEach(function (b) {{
+      b.disabled = true;
+      var idx = parseInt(b.getAttribute('data-index'), 10);
+      if (idx === correct) b.classList.add('quiz-correct');
+      else if (idx === chosen) b.classList.add('quiz-wrong');
+    }});
+    var resultEl = document.getElementById('quiz-result');
+    if (resultEl) {{
+      var isCorrect = chosen === correct;
+      resultEl.textContent = isCorrect ? '✅ آفرین، درست حدس زدی!' : '❌ جواب درست این نبود.';
+      resultEl.className = 'quiz-result ' + (isCorrect ? 'quiz-result-correct' : 'quiz-result-wrong');
+    }}
+    var expl = document.getElementById('quiz-explanation');
+    if (expl) expl.style.display = 'block';
+  }}
   // دکمه‌ی سراسری «نمایش زبان اصلی»: کلاس show-original رو رو body toggle می‌کنه که با
   // CSS بالا (.title-fa / .title-orig) بین تیتر فارسی و تیتر اصلی هر خبر سوییچ می‌کنه.
   // انتخاب کاربر تو localStorage همین مرورگر ذخیره می‌شه تا دفعه‌ی بعد که همین صفحه رو
@@ -1094,7 +1257,8 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     var isOriginal = document.body.classList.toggle('show-original');
     var btn = document.getElementById('lang-toggle-btn');
     if (btn) {{
-      btn.textContent = isOriginal ? '🌐 نمایش ترجمه فارسی' : '🌐 نمایش زبان اصلی خبرها';
+      btn.textContent = isOriginal ? 'FA' : 'EN';
+      btn.title = isOriginal ? 'نمایش خبرها به فارسی' : 'نمایش خبرها به زبان اصلی (انگلیسی)';
     }}
     try {{ localStorage.setItem('newsDigestShowOriginalLang', isOriginal ? '1' : '0'); }} catch (e) {{}}
   }}
@@ -1103,7 +1267,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
       if (localStorage.getItem('newsDigestShowOriginalLang') === '1') {{
         document.body.classList.add('show-original');
         var btn = document.getElementById('lang-toggle-btn');
-        if (btn) {{ btn.textContent = '🌐 نمایش ترجمه فارسی'; }}
+        if (btn) {{ btn.textContent = 'FA'; btn.title = 'نمایش خبرها به فارسی'; }}
       }}
     }} catch (e) {{}}
   }})();
