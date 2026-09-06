@@ -792,49 +792,48 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>خلاصه اخبار - {now_str}</title>
 <style>
-  /* فونت Estedad سلف‌هاست‌شده - قبلا Vazirmatn بود (کاربر رو آیفون قبول نداشت)، بعد Sahel
-     (کاربر گفت زیبا نیست). درخواست بعدی «مثل tgju.org» (IRANSans/Iranyekan) بود که
-     تجاری/خصوصی‌ان و مجوز توزیع رایگان ندارن. Peyda هم امتحان شد ولی معلوم شد محصول فروشی
-     فونت‌ایرانه (ریسک حقوقی برای قراردادن رایگان تو یک ریپو/سایت عمومی). Estedad یک فونت
-     فارسی/عربی کاملا رایگان و متن‌باز (SIL OFL 1.1، github.com/aminabedi68/Estedad - متن
-     کامل مجوز کنار خود فایل‌ها در assets/fonts/ESTEDAD-OFL-LICENSE.txt) با ظاهر هندسی و
-     مدرن‌تر از Sahel/Vazirmatn. مثل قبل، خودِ فایل‌های فونت (woff2) داخل مخزن (assets/fonts)
-     قرار گرفته و مستقیم از همون GitHub Pages سرو می‌شه - هیچ وابستگی به دامنه‌ی خارجی
-     نیست، پس رو هر دستگاه/شبکه‌ای دقیقا همون فونتیه که رو کامپیوتر دیده می‌شه. */
+  /* فونت Vazirmatn سلف‌هاست‌شده - تاریخچه‌ی فونت این پروژه: Vazirmatn (اولیه) → Sahel
+     (کاربر گفت زیبا نبود) → Estedad (درخواست بعدی، ظاهر هندسی‌تر) → و حالا دوباره
+     Vazirmatn طبق درخواست صریح کاربر (rastikerdar.github.io/vazirmatn/fa). Vazirmatn یک
+     فونت فارسی/عربی کاملا رایگان و متن‌باز (SIL OFL 1.1، github.com/rastikerdar/vazirmatn -
+     متن کامل مجوز کنار خود فایل‌ها در assets/fonts/VAZIRMATN-OFL-LICENSE.txt). مثل قبل،
+     خودِ فایل‌های فونت (woff2) داخل مخزن (assets/fonts) قرار گرفته و مستقیم از همون
+     GitHub Pages سرو می‌شه - هیچ وابستگی به دامنه‌ی خارجی نیست، پس رو هر دستگاه/شبکه‌ای
+     دقیقا همون فونتیه که رو کامپیوتر دیده می‌شه. */
   @font-face {{
-    font-family: 'Estedad';
+    font-family: 'Vazirmatn';
     font-style: normal;
     font-weight: 300;
     font-display: swap;
-    src: url('assets/fonts/estedad-light.woff2') format('woff2');
+    src: url('assets/fonts/vazirmatn-light.woff2') format('woff2');
   }}
   @font-face {{
-    font-family: 'Estedad';
+    font-family: 'Vazirmatn';
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url('assets/fonts/estedad-regular.woff2') format('woff2');
+    src: url('assets/fonts/vazirmatn-regular.woff2') format('woff2');
   }}
   @font-face {{
-    font-family: 'Estedad';
+    font-family: 'Vazirmatn';
     font-style: normal;
     font-weight: 500 600;
     font-display: swap;
-    src: url('assets/fonts/estedad-semibold.woff2') format('woff2');
+    src: url('assets/fonts/vazirmatn-semibold.woff2') format('woff2');
   }}
   @font-face {{
-    font-family: 'Estedad';
+    font-family: 'Vazirmatn';
     font-style: normal;
     font-weight: 700;
     font-display: swap;
-    src: url('assets/fonts/estedad-bold.woff2') format('woff2');
+    src: url('assets/fonts/vazirmatn-bold.woff2') format('woff2');
   }}
   @font-face {{
-    font-family: 'Estedad';
+    font-family: 'Vazirmatn';
     font-style: normal;
     font-weight: 800 900;
     font-display: swap;
-    src: url('assets/fonts/estedad-black.woff2') format('woff2');
+    src: url('assets/fonts/vazirmatn-black.woff2') format('woff2');
   }}
   :root {{
     --bg: #eef1f5;
@@ -855,7 +854,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
     text-size-adjust: 100%;
   }}
   html, body, div, span, h1, h2, h3, p, a, label, summary, input {{
-    font-family: 'Estedad', Tahoma, Arial, sans-serif !important;
+    font-family: 'Vazirmatn', Tahoma, Arial, sans-serif !important;
     /* رندر فونت روی وب‌کیت/سافاری (به‌خصوص آیفون) بدون این پرچم‌ها ضخیم‌تر و
        کم‌کیفیت‌تر از نسخه‌ی دسکتاپ دیده می‌شه. */
     -webkit-font-smoothing: antialiased;
@@ -887,7 +886,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .lang-toggle-btn {{
     background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.35); color: #fff;
     border-radius: 20px; padding: 5px 13px; font-size: 12px; cursor: pointer; white-space: nowrap;
-    font-family: 'Estedad', Tahoma, Arial, sans-serif;
+    font-family: 'Vazirmatn', Tahoma, Arial, sans-serif;
   }}
   .lang-toggle-btn:hover {{ background: rgba(255,255,255,.28); }}
   .title-orig {{ display: none; }}
@@ -1039,7 +1038,7 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   footer {{ text-align: center; padding: 22px; font-size: 11px; color: var(--muted); }}
 
   /* روی گوشی (به‌خصوص آیفون)، خیلی از متن‌های ریز این صفحه (۱۰.۵ تا ۱۲.۵ پیکسل - برای
-     برچسب قیمت/واحد/منبع خبر/زمان و غیره) با وجود فونت درست (Estedad)، به‌خاطر
+     برچسب قیمت/واحد/منبع خبر/زمان و غیره) با وجود فونت درست (Vazirmatn)، به‌خاطر
      ریزنقشی و پیچیدگی حروف فارسی نسبت به لاتین، در این سایزهای کوچیک کمتر واضح به‌نظر
      می‌رسن - این ربطی به نوع فونت نداره، صرفا اندازه‌ی خیلی کوچیکشه. این بخش فقط زیر
      ۴۸۰px عرض صفحه (یعنی موبایل، نه لپ‌تاپ) این سایزها رو کمی بزرگ‌تر می‌کنه تا خوانایی
