@@ -33,6 +33,16 @@ TELEGRAM_CHANNELS = [
     {"name": "مملکته", "username": "mamlekate"},
     {"name": "وحید آنلاین", "username": "VahidOnline"},
     {"name": "Iranwire", "username": "Farsi_Iranwire"},
+    # ۴ کانال زیر (لینک‌های t.me مستقیم از خود کاربر) رو کاربر به‌عنوان مرجع نرخ آزاد
+    # ارز/طلا معرفی کرد - کانال‌های شناخته‌شده‌ی گزارش لحظه‌ای نرخ دلار/سکه/طلا در بازار
+    # آزاد تهران. توجه: این‌ها جایگزین عدد لحظه‌ای بخش «ارز» و «طلا و سکه» بالای گزارش
+    # (که از tgju.org میاد) نمی‌شن - اون بخش یک API عددی مجزاست و همون‌جا می‌مونه. این
+    # کانال‌ها فقط به‌عنوان منبع خبری/تحلیلی اضافه به دسته‌ی «اقتصادی» اضافه می‌شن تا
+    # نرخ/تحلیل بازار آزاد هم در کنار بقیه‌ی اخبار اقتصادی دیده بشه.
+    {"name": "سکه حیدری", "username": "seke_heidary"},
+    {"name": "ایران کارنسی", "username": "irancurrency"},
+    {"name": "دلار تهران", "username": "dollar_tehran3bze"},
+    {"name": "صرافی هانا", "username": "hanaexchange"},
 ]
 # نکته مهم (کشف‌شده و رفع‌شده): سرور اصلی rsshub.app اخیرا پشت محافظت ضدـربات
 # Cloudflare قرار گرفته و به هر درخواست خودکار/سرور به سرور (مثل GitHub Actions)
@@ -68,6 +78,12 @@ RSS_SOURCES = {
         {"name": "Cointelegraph (کریپتو)", "url": "https://cointelegraph.com/rss", "tag": "crypto"},
         {"name": "ForexLive (فارکس)", "url": "https://www.forexlive.com/feed/news", "tag": "forex"},
         {"name": "Investing.com - فارکس", "url": "https://www.investing.com/rss/news_1.rss", "tag": "forex - TO VERIFY"},
+        # ۴ کانال زیر: مرجع نرخ بازار آزاد دلار/طلا/سکه در تهران (پیشنهاد خود کاربر) -
+        # مکمل شاخص‌های رسمی tgju.org که بالای گزارش نشون داده می‌شن، نه جایگزینشون.
+        _telegram_source(TELEGRAM_CHANNELS[8], "نرخ بازار آزاد طلا/سکه"),
+        _telegram_source(TELEGRAM_CHANNELS[9], "نرخ بازار آزاد ارز"),
+        _telegram_source(TELEGRAM_CHANNELS[10], "نرخ بازار آزاد دلار"),
+        _telegram_source(TELEGRAM_CHANNELS[11], "نرخ بازار آزاد ارز - صرافی"),
     ],
     "سیاسی داخلی": [
         {"name": "BBC Persian", "url": "https://feeds.bbci.co.uk/persian/rss.xml", "tag": "سیاست ایران - دیدگاه بی‌طرف"},
