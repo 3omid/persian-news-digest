@@ -1047,6 +1047,19 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   .note-card.rose {{ background: #fbe9ee; border-color: #a4425f; }}
   .note-card.sepia {{ background: #f7f1e6; border-color: #8a6d3b; }}
 
+  /* کارت‌های «جانبی» (نکته/تست/سخن بزرگان/شعر) قبلا هرکدوم یه div تمام‌عرض بودن که رو
+     صفحه‌ی بزرگ (کامپیوتر، container تا 1500px) با متن کوتاهشون فضای خالی زیادی
+     دوروبرشون می‌موند (گزارش کاربر: «نوشته‌ی سایت اینجا خیلی خالیه») - دقیقا همون
+     مشکلی که چیدمان چندستونه‌ی بخش اخبار (بالاتر، columns_html) قبلا براش حل شده بود
+     ولی این ۴ کارت داخل اون سیستم نبودن. اینجا فقط رو صفحه‌ی بزرگ (همون بریک‌پوینت
+     860px که container عریض می‌شه) دوتا-دوتا کنار هم می‌چینیم‌شون تا فضای خالی از بین
+     بره؛ رو موبایل دقیقا مثل قبل (تک‌ستونه، پشت‌سرهم) می‌مونه. */
+  .extras-grid {{ display: block; }}
+  @media (min-width: 860px) {{
+    .extras-grid {{ display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 12px; margin-bottom: 10px; }}
+    .extras-grid > .note-card {{ margin-bottom: 0; }}
+  }}
+
   /* تست چهارگزینه‌ای هوش - کاملا با CSS+JS خالص، بدون رفت‌وبرگشت به سرور (رجوع کن به
      checkDailyQuiz در اسکریپت پایین صفحه). */
   .quiz-question {{ font-weight: 700; margin: 0 0 10px; }}
@@ -1212,10 +1225,12 @@ def build_report(category_analyses: dict, currencies: dict, iran_usd_toman,
   {currency_overlays}
   {gold_html}
   {gold_overlays_html}
-  {market_tip_html}
-  {quiz_html}
-  {quote_html}
-  {poem_html}
+  <div class="extras-grid">
+    {market_tip_html}
+    {quiz_html}
+    {quote_html}
+    {poem_html}
+  </div>
   {rollup_html}
   <div class="note-card amber"><div class="note-label">📈 <strong>پیش‌بینی اقتصادی</strong></div>{_md(forecast_text)}</div>
   <div class="note-card blue"><div class="note-label">🏛️ <strong>تحلیل سیاسی</strong></div>{_md(political_text)}</div>
