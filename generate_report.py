@@ -8,6 +8,7 @@
 import base64
 import html as html_lib
 import io
+import math
 import os
 import re
 from datetime import datetime, timezone
@@ -566,7 +567,19 @@ def _crypto_cell(c):
     باعث می‌شد این بخش خیلی طولانی بشه و اسکرول زیادی لازم داشته باشه."""
     chg = c["change_24h_pct"] or 0
     price = c["price_usd"]
-    price_str = f"${price:,.4f}" if price < 1 else f"${price:,.2f}"
+    if price >= 1:
+        price_str = f"${price:,.2f}"
+    elif price >= 0.0001:
+        price_str = f"${price:,.4f}"
+    elif price > 0:
+        # باگ: سکه‌های خیلی ریزقیمت (مثل Shiba Inu، حدود ۰.۰۰۰۰۱ دلار) با همون ۴ رقم
+        # اعشار ثابت بالا رند می‌شدن به "$0.0000" - یعنی هیچ عدد معناداری نشون نمی‌داد و
+        # قیمت انگار صفر بود. اینجا برای قیمت‌های زیر ۰٫۰۰۰۱ تعداد رقم اعشار رو بر اساس
+        # مرتبه‌ی بزرگی خود عدد تنظیم می‌کنیم تا همیشه حداقل ۳ رقم معنادار نشون داده بشه.
+        decimals = -math.floor(math.log10(price)) + 2
+        price_str = f"${price:,.{decimals}f}"
+    else:
+        price_str = "$0.00"
     up = chg >= 0
     cls = "up" if up else "down"
     arrow = "▲" if up else "▼"
