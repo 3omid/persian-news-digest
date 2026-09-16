@@ -56,8 +56,11 @@ def send_report(html_path: str, short_summary: str = ""):
         log.warning("هیچ مقصدی پیدا نشد (نه تو TELEGRAM_CHAT_ID نه تو bot_state.json).")
         return False
 
+    log.info(f"شروع ارسال گزارش به {len(targets)} مقصد: {', '.join(targets)}")
+
     base = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}"
-    any_success = False
+    success_list = []
+    failed_list = []
 
     for chat_id in targets:
         if short_summary:
@@ -78,9 +81,14 @@ def send_report(html_path: str, short_summary: str = ""):
                 }, files={"document": f}, timeout=30)
             if not resp.ok:
                 log.error(f"خطا در ارسال فایل گزارش به {chat_id}: {resp.status_code} - {resp.text}")
+                failed_list.append(chat_id)
             else:
-                any_success = True
+                success_list.append(chat_id)
         except Exception as e:
             log.error(f"خطا در ارسال فایل گزارش به {chat_id}: {e}")
+            failed_list.append(chat_id)
 
-    return any_success
+    log.info(f"✅ خلاصه ارسال: موفق برای {len(success_list)} نفر ({', '.join(success_list) if success_list else '-'}) "
+              f"| ناموفق برای {len(failed_list)} نفر ({', '.join(failed_list) if failed_list else '-'})")
+
+    return len(success_list) > 0
