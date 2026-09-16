@@ -1,5 +1,15 @@
 # -*- coding: utf-8 -*-
-"""ارسال گزارش نهایی به تلگرام (فایل HTML به‌عنوان سند + خلاصه متنی کوتاه)."""
+"""
+ارسال گزارش نهایی به تلگرام - به چند مقصد هم‌زمان (فایل HTML + خلاصه متنی کوتاه).
+
+TELEGRAM_CHAT_ID می‌تونه چند مقصد رو با کاما از هم جدا شده داشته باشه، هر ترکیبی:
+- آیدی عددی شخصی (مثلا 7022880679) - برای اینکه به یه نفر خاص برسه، اون شخص باید
+  قبلش رو ربات Start زده باشه.
+- @یوزرنیم یه کانال تلگرام (مثلا @my_news_channel) - برای اینکه به همه اعضای کانال
+  برسه، ربات باید ادمین اون کانال با اجازه‌ی «ارسال پیام» باشه.
+مثال یک سیکرت با هر دو نوع ترکیب‌شده:
+  7022880679,@my_news_channel,123456789
+"""
 
 import logging
 import requests
@@ -8,61 +18,69 @@ import config
 
 log = logging.getLogger(__name__)
 
-TELEGRAM_TEXT_LIMIT = 4096
 
+def _get_targets():
+    """
+    لیست مقصدها رو از دو جا جمع می‌کنه:
+    ۱) سیکرت TELEGRAM_CHAT_ID (دستی، با کاما جدا)
+    ۲) فایل bot_state.json (خودکار - هرکی رو ربات /start زده)
+    و بدون تکراری برمی‌گردونه.
+    """
+    import json
+    import os
 
-def _safe_truncate_html(text: str, limit: int) -> str:
-    """
-    برش امن یک متن با تگ‌های ساده‌ی <b>...</b> و <i>...</i> (که main.py برای عنوان هر دسته
-    و برای جمله بزرگان/بیت شعر می‌سازه) در مرز محدودیت کاراکتری تلگرام. قبلا این برش با یک
-    [:limit] ساده انجام می‌شد که ممکن بود دقیقا وسط یک تگ باز/بسته ببره؛ در اون حالت تلگرام
-    کل پیام رو با خطای "can't find end of the entity" رد می‌کنه (نه فقط قسمت بریده‌شده رو).
-    اینجا اگه بعد از برش یکی از این تگ‌ها بدون بسته‌کننده باقی بمونه، متن تا آخرین خط کامل
-    قبلی کوتاه می‌شه و در صورت لزوم تگ باز بسته می‌شه تا پیام همیشه سالم بمونه.
-    """
-    if len(text) <= limit:
-        return text
-    cut = text[:limit]
-    if any(cut.count(f"<{tag}>") > cut.count(f"</{tag}>") for tag in ("b", "i")):
-        last_safe_nl = cut.rfind("\n")
-        if last_safe_nl > 0:
-            cut = cut[:last_safe_nl]
-        for tag in ("b", "i"):
-            if cut.count(f"<{tag}>") > cut.count(f"</{tag}>"):
-                cut += f"</{tag}>"
-    return cut.rstrip() + "\n…"
+    raw = config.TELEGRAM_CHAT_ID or ""
+    targets = [t.strip() for t in raw.split(",") if t.strip()]
+
+    if os.path.exists(config.BOT_STATE_FILE):
+        try:
+            with open(config.BOT_STATE_FILE, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            for sub in state.get("subscribers", []):
+                chat_id = str(sub.get("chat_id", "")).strip()
+                if chat_id:
+                    targets.append(chat_id)
+        except Exception as e:
+            log.warning(f"خطا در خوندن {config.BOT_STATE_FILE}: {e}")
+
+    return list(dict.fromkeys(targets))  # حذف موارد تکراری، ترتیب حفظ می‌شه
 
 
 def send_report(html_path: str, short_summary: str = ""):
-    if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
-        log.warning("توکن یا chat_id تلگرام تنظیم نشده - ارسال انجام نشد.")
+    if not config.TELEGRAM_BOT_TOKEN:
+        log.warning("توکن تلگرام تنظیم نشده - ارسال انجام نشد.")
+        return False
+
+    targets = _get_targets()
+    if not targets:
+        log.warning("هیچ مقصدی پیدا نشد (نه تو TELEGRAM_CHAT_ID نه تو bot_state.json).")
         return False
 
     base = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}"
+    any_success = False
 
-    if short_summary:
+    for chat_id in targets:
+        if short_summary:
+            try:
+                resp = requests.post(f"{base}/sendMessage", data={
+                    "chat_id": chat_id,
+                    "text": short_summary[:4000],
+                }, timeout=20)
+                if not resp.ok:
+                    log.error(f"خطا در ارسال پیام متنی تلگرام به {chat_id}: {resp.status_code} - {resp.text}")
+            except Exception as e:
+                log.error(f"خطا در ارسال پیام متنی تلگرام به {chat_id}: {e}")
+
         try:
-            # parse_mode=HTML تا <b>...</b> که تو main.py برای عنوان هر دسته ساخته می‌شه
-            # واقعا بولد نمایش داده بشه، نه به‌صورت تگ خام تو پیام.
-            resp = requests.post(f"{base}/sendMessage", data={
-                "chat_id": config.TELEGRAM_CHAT_ID,
-                "text": _safe_truncate_html(short_summary, TELEGRAM_TEXT_LIMIT - 96),
-                "parse_mode": "HTML",
-            }, timeout=20)
+            with open(html_path, "rb") as f:
+                resp = requests.post(f"{base}/sendDocument", data={
+                    "chat_id": chat_id,
+                }, files={"document": f}, timeout=30)
             if not resp.ok:
-                log.error(f"خطا در ارسال پیام متنی تلگرام: {resp.status_code} - {resp.text}")
+                log.error(f"خطا در ارسال فایل گزارش به {chat_id}: {resp.status_code} - {resp.text}")
+            else:
+                any_success = True
         except Exception as e:
-            log.error(f"خطا در ارسال پیام متنی تلگرام: {e}")
+            log.error(f"خطا در ارسال فایل گزارش به {chat_id}: {e}")
 
-    try:
-        with open(html_path, "rb") as f:
-            resp = requests.post(f"{base}/sendDocument", data={
-                "chat_id": config.TELEGRAM_CHAT_ID,
-            }, files={"document": f}, timeout=30)
-        if not resp.ok:
-            log.error(f"خطا در ارسال فایل گزارش به تلگرام: {resp.status_code} - {resp.text}")
-        resp.raise_for_status()
-        return True
-    except Exception as e:
-        log.error(f"خطا در ارسال فایل گزارش به تلگرام: {e}")
-        return False
+    return any_success
