@@ -89,6 +89,16 @@ def _send_message(chat_id, text):
     }, timeout=20)
 
 
+def _notify_admin(text):
+    """به خودت (شناسه‌هایی که تو سیکرت TELEGRAM_CHAT_ID گذاشتی) خبر می‌ده - نه به اعضای عادی."""
+    admin_targets = [t.strip() for t in (config.TELEGRAM_CHAT_ID or "").split(",") if t.strip()]
+    for admin_id in admin_targets:
+        try:
+            _send_message(admin_id, text)
+        except Exception as e:
+            log.warning(f"خطا در اطلاع‌رسانی به ادمین {admin_id}: {e}")
+
+
 # ---------------------------------------------------------------
 # گرفتن «آخرین خبر» یک دسته به‌صورت زنده (سبک و سریع - بدون تحلیل AI)
 # ---------------------------------------------------------------
@@ -194,6 +204,10 @@ def run():
             is_new = _add_subscriber(state, chat_id, user)
             _send_welcome(chat_id)
             log.info(f"عضو {'جدید' if is_new else 'قدیمی'}: {chat_id} ({user.get('first_name', '')})")
+            if is_new:
+                display_name = (user.get("first_name", "") + " " + user.get("last_name", "")).strip() or "بدون‌نام"
+                username_part = f"@{user['username']}" if user.get("username") else "بدون یوزرنیم"
+                _notify_admin(f"🆕 عضو جدید به ربات پیوست:\n{display_name} ({username_part})\nشناسه: {chat_id}")
             changed = True
             continue
 
