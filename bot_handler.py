@@ -6,6 +6,7 @@
 
 - کسی که /start بزنه: خودکار عضو می‌شه (نیاز به تایید نداره) + پیام خوش‌آمد و منوی دکمه‌ای می‌گیره.
 - کسی رو دکمه بزنه: آخرین خبر همون دسته رو فوری (زنده از RSS) براش می‌فرسته.
+- هر پیام یا دستور دیگه‌ای هم منو رو دوباره نشون می‌ده.
 - لیست اعضا تو فایل config.BOT_STATE_FILE ذخیره می‌شه (خودکار commit می‌شه تو ریپو) -
   از همونجا می‌تونی هر وقت خواستی ببینی کیا عضو شدن.
 """
@@ -26,9 +27,6 @@ log = logging.getLogger(__name__)
 API = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}"
 
 
-# ---------------------------------------------------------------
-# ذخیره/بارگذاری وضعیت (لیست اعضا + آخرین آپدیت پردازش‌شده)
-# ---------------------------------------------------------------
 def _load_state():
     if os.path.exists(config.BOT_STATE_FILE):
         with open(config.BOT_STATE_FILE, "r", encoding="utf-8") as f:
@@ -54,26 +52,38 @@ def _add_subscriber(state, chat_id, user):
     return True
 
 
-# ---------------------------------------------------------------
-# فراخوانی‌های تلگرام
-# ---------------------------------------------------------------
 def _get_updates(offset):
     resp = requests.get(f"{API}/getUpdates", params={"offset": offset, "timeout": 0}, timeout=20)
     resp.raise_for_status()
     return resp.json().get("result", [])
 
 
-def _send_welcome(chat_id):
+def _send_menu(chat_id, greeting=True):
     keyboard = [[{"text": label, "callback_data": key}] for label, key in config.BOT_MENU_BUTTONS]
-    text = (
-        "👋 خوش اومدی!\n\n"
-        "از این پس هر ساعت خلاصه‌ی کامل اخبار برات می‌فرستم.\n"
-        "همین الان هم می‌تونی یکی از دسته‌ها رو انتخاب کنی تا آخرین خبرش رو فوری ببینی:"
-    )
+    if greeting:
+        text = (
+            "👋 خوش اومدی!\n\n"
+            "از این پس هر ساعت خلاصه‌ی کامل اخبار برات می‌فرستم.\n"
+            "همین الان هم می‌تونی یکی از دسته‌ها رو انتخاب کنی تا آخرین خبرش رو فوری ببینی:"
+        )
+    else:
+        text = "منوی دسته‌ها 👇"
     requests.post(f"{API}/sendMessage", json={
         "chat_id": chat_id, "text": text,
         "reply_markup": {"inline_keyboard": keyboard},
     }, timeout=20)
+
+
+def _setup_bot_commands():
+    commands = [
+        {"command": "start", "description": "شروع / نمایش منو"},
+        {"command": "menu", "description": "نمایش منوی دسته‌های خبری"},
+    ]
+    try:
+        requests.post(f"{API}/setMyCommands", json={"commands": commands}, timeout=15)
+        requests.post(f"{API}/setChatMenuButton", json={"menu_button": {"type": "commands"}}, timeout=15)
+    except Exception as e:
+        log.warning(f"خطا در ثبت دستورات ربات: {e}")
 
 
 def _answer_callback(callback_id):
@@ -90,7 +100,6 @@ def _send_message(chat_id, text):
 
 
 def _notify_admin(text):
-    """به خودت (شناسه‌هایی که تو سیکرت TELEGRAM_CHAT_ID گذاشتی) خبر می‌ده - نه به اعضای عادی."""
     admin_targets = [t.strip() for t in (config.TELEGRAM_CHAT_ID or "").split(",") if t.strip()]
     for admin_id in admin_targets:
         try:
@@ -99,15 +108,18 @@ def _notify_admin(text):
             log.warning(f"خطا در اطلاع‌رسانی به ادمین {admin_id}: {e}")
 
 
-# ---------------------------------------------------------------
-# گرفتن «آخرین خبر» یک دسته به‌صورت زنده (سبک و سریع - بدون تحلیل AI)
-# ---------------------------------------------------------------
+def _fetch_feed_with_timeout(url, timeout=8):
+    resp = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    return feedparser.parse(resp.content)
+
+
 def _latest_item_for_category(category_key):
     sources = config.RSS_SOURCES.get(category_key, [])
     best = None
     for src in sources[:4]:
         try:
-            feed = feedparser.parse(src["url"])
+            feed = _fetch_feed_with_timeout(src["url"])
             if not feed.entries:
                 continue
             entry = feed.entries[0]
@@ -152,7 +164,7 @@ def _all_categories_snapshot():
         sources = config.RSS_SOURCES.get(category_key, [])
         for src in sources[:2]:
             try:
-                feed = feedparser.parse(src["url"])
+                feed = _fetch_feed_with_timeout(src["url"])
                 if feed.entries:
                     title = getattr(feed.entries[0], "title", "").strip()
                     if title:
@@ -177,13 +189,12 @@ def _handle_category_request(chat_id, key):
     _send_message(chat_id, text)
 
 
-# ---------------------------------------------------------------
-# اجرای اصلی
-# ---------------------------------------------------------------
 def run():
     if not config.TELEGRAM_BOT_TOKEN:
         log.error("TELEGRAM_BOT_TOKEN تنظیم نشده - ربات نمی‌تونه اجرا بشه.")
         return False
+
+    _setup_bot_commands()
 
     state = _load_state()
     offset = state.get("last_update_id", 0) + 1
@@ -198,16 +209,23 @@ def run():
         state["last_update_id"] = update["update_id"]
 
         message = update.get("message")
-        if message and message.get("text", "").strip().startswith("/start"):
+        if message:
+            text = message.get("text", "").strip()
             chat_id = message["chat"]["id"]
             user = message.get("from", {})
-            is_new = _add_subscriber(state, chat_id, user)
-            _send_welcome(chat_id)
-            log.info(f"عضو {'جدید' if is_new else 'قدیمی'}: {chat_id} ({user.get('first_name', '')})")
-            if is_new:
-                display_name = (user.get("first_name", "") + " " + user.get("last_name", "")).strip() or "بدون‌نام"
-                username_part = f"@{user['username']}" if user.get("username") else "بدون یوزرنیم"
-                _notify_admin(f"🆕 عضو جدید به ربات پیوست:\n{display_name} ({username_part})\nشناسه: {chat_id}")
+
+            if text.startswith("/start"):
+                is_new = _add_subscriber(state, chat_id, user)
+                _send_menu(chat_id, greeting=True)
+                log.info(f"عضو {'جدید' if is_new else 'قدیمی'}: {chat_id} ({user.get('first_name', '')})")
+                if is_new:
+                    display_name = (user.get("first_name", "") + " " + user.get("last_name", "")).strip() or "بدون‌نام"
+                    username_part = f"@{user['username']}" if user.get("username") else "بدون یوزرنیم"
+                    _notify_admin(f"🆕 عضو جدید به ربات پیوست:\n{display_name} ({username_part})\nشناسه: {chat_id}")
+            else:
+                _send_menu(chat_id, greeting=False)
+                log.info(f"پیام/دستور «{text}» از {chat_id} - منو دوباره فرستاده شد")
+
             changed = True
             continue
 
