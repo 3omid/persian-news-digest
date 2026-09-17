@@ -16,7 +16,6 @@
 """
 
 import argparse
-import html
 import logging
 from datetime import datetime
 
@@ -52,26 +51,6 @@ def maybe_periodic_rollups():
     return rollups
 
 
-def _smart_truncate(text: str, limit: int) -> str:
-    """
-    برش متن در مرز جمله یا حداقل مرز کلمه، نه وسط کلمه/جمله - چون خلاصه‌ی کوتاهی که
-    برای تلگرام می‌فرستیم قبلا با text[:150] بریده می‌شد و همیشه وسط یه کلمه/جمله
-    قطع می‌شد (ناقص و بی‌معنی به‌نظر می‌رسید). اینجا سعی می‌کنیم تا نزدیک‌ترین
-    نقطه/علامت سوال/تعجب قبل از حد مجاز ببریم؛ اگه پیدا نشد، حداقل سر یه کلمه کامل.
-    """
-    text = (text or "").strip()
-    if len(text) <= limit:
-        return text
-    cut = text[:limit]
-    last_sentence_end = max(cut.rfind("."), cut.rfind("؟"), cut.rfind("!"))
-    if last_sentence_end >= int(limit * 0.4):
-        return cut[: last_sentence_end + 1]
-    last_space = cut.rfind(" ")
-    if last_space >= int(limit * 0.4):
-        cut = cut[:last_space]
-    return cut.rstrip() + " …"
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--category", default=None, help="فقط این دسته رو پردازش کن (اختیاری)")
@@ -87,40 +66,29 @@ def main():
             return
         news_by_category = {k: (v if k == args.category else []) for k, v in news_by_category.items()}
 
-    # نکته مهم (اصلاح باگ): این متغیر قبلا "total_new" نام داشت ولی در واقع تعداد کل
-    # خبرهای *نمایش‌داده‌شده* (تا ۹۶ ساعت اخیر، طبق config.DISPLAY_LOOKBACK_HOURS) رو
-    # می‌شمرد، نه خبرهای واقعا تازه (is_new). چون تقریبا همیشه حداقل یک خبر نمایشی در بازه‌ی
-    # ۹۶ساعته پیدا می‌شه، این گیت عملا بی‌اثر بود مگر در حالت نادر خرابی کامل همه‌ی منبع‌های
-    # RSS - ولی همون حالت نادر دقیقا باعث می‌شد در بدترین لحظه (وقتی همه‌چیز خراب شده)، کل
-    # گزارش (شامل نرخ ارز/طلا/کریپتو که هیچ ربطی به خبر ندارن) اصلا آپدیت نشه و سایت با اعداد
-    # قدیمی بمونه - دقیقا همون مشکلی که کاربر گزارش داد. حالا این گیت فقط جلوی «گزارش کاملا
-    # خالی» (وقتی هیچ خبری، حتی قدیمی، از هیچ منبعی نیومده - نشونه‌ی قطعی مشکل شبکه) رو
-    # می‌گیره؛ در غیر این صورت گزارش/نرخ‌ها هر بار اجرای ساعتی (چه خبر تازه‌ای باشه چه نه)
-    # کامل به‌روزرسانی و منتشر می‌شن. تعداد خبر *واقعا* تازه جداگانه محاسبه می‌شه و فقط برای
-    # تصمیم «ارسال پیام تلگرام یا نه» (پایین‌تر) استفاده می‌شه تا هر ساعت با یک پیام تکراری
-    # تلگرام اسپم نشه.
-    total_displayed = sum(len(v) for v in news_by_category.values())
-    total_new = sum(1 for items in news_by_category.values() for it in items if it.get("is_new"))
-    log.info(f"مجموع خبر نمایش‌داده‌شده: {total_displayed} (از این تعداد واقعا جدید: {total_new})")
+    total_new = sum(len(v) for v in news_by_category.values())
+    log.info(f"مجموع خبر جدید: {total_new}")
 
-    if total_displayed == 0 and not args.force:
-        log.warning(
-            "هیچ خبری (حتی قدیمی) از هیچ منبعی دریافت نشد - احتمالا مشکل شبکه/RSS در این اجرا. "
-            "برای جلوگیری از انتشار گزارش خالی/خراب، این اجرا متوقف می‌شود. "
-            "(برای اجبار از --force استفاده کن)"
-        )
+    if total_new == 0 and not args.force:
+        log.info("خبر جدیدی نبود - گزارش ساخته نمی‌شود. (برای اجبار از --force استفاده کن)")
         return
 
     log.info("دریافت نرخ ارز، طلا و کریپتو...")
-    currencies = fetch_rates.get_all_currencies()
-    iran_usd_toman = fetch_rates.get_iran_usd_toman()
-    iran_usd_toman_series = fetch_rates.get_iran_usd_toman_series()
-    usd_change_percent = fetch_rates.get_iran_usd_toman_change_percent()
-    gold_coin_prices = fetch_rates.get_gold_coin_prices()
-    gold_coin_series = fetch_rates.get_gold_coin_series()
-    stock_movers = fetch_stocks.get_stock_movers()
-    weather_data = fetch_weather.get_all_weather()
-    crypto_market = fetch_crypto.get_crypto_market()
+
+    def _safe(label, func, default):
+        """اجرای امن هر تابع جانبی - اگه خطا داد، کل گزارش رو نمی‌ترکونه، فقط اون بخش خالی می‌مونه."""
+        try:
+            return func()
+        except Exception as e:
+            log.error(f"خطا در دریافت {label} - این بخش نادیده گرفته می‌شه، ولی بقیه گزارش ادامه پیدا می‌کنه: {e}")
+            return default
+
+    currencies = _safe("نرخ ارز", fetch_rates.get_all_currencies, {})
+    iran_usd_toman = _safe("نرخ تومان", fetch_rates.get_iran_usd_toman, None)
+    gold_coin_prices = _safe("قیمت طلا/سکه", fetch_rates.get_gold_coin_prices, {})
+    stock_movers = _safe("قیمت سهام", fetch_stocks.get_stock_movers, [])
+    weather_data = _safe("آب‌وهوا", fetch_weather.get_all_weather, [])
+    crypto_market = _safe("قیمت کریپتو", fetch_crypto.get_crypto_market, [])
 
     log.info("تحلیل هر دسته با Claude API...")
     category_analyses = {}
@@ -141,84 +109,22 @@ def main():
         if any(k in it["source"].lower() for k in ["coindesk", "cointelegraph"])
     ]
     crypto_text = analyze.crypto_analysis(crypto_market, crypto_news)
-    stocks_text = analyze.stock_market_analysis(stock_movers)
 
     rollups = maybe_periodic_rollups() if not args.category else {}
-
-    # بسته‌ی محتوای جانبیِ تازه‌ی همین اجرا: نکته آموزشی + تست چهارگزینه‌ای + جمله بزرگان +
-    # بیت شعر فارسی (درخواست کاربر: هر بار گزارش می‌ره، این‌ها جدید و غیرتکراری باشن). تاریخچه‌ی
-    # هرکدوم رو جدا به مدل می‌دیم تا موضوع/سوال/جمله‌ی تازه‌ای انتخاب کنه؛ اگه تولید یک بخش
-    # شکست بخوره یا ناقص باشه، خالی می‌مونه و generate_report خودش با fallback (برای tip) یا
-    # حذف اون بخش (برای quiz/quote/poem) رفتار می‌کنه - گزارش هیچ‌وقت به‌خاطر این بخش‌ها نمی‌شکنه.
-    recent_extras = {
-        "tip": fetch_news.get_recent_extras("tip"),
-        "quiz": fetch_news.get_recent_extras("quiz"),
-        "quote": fetch_news.get_recent_extras("quote"),
-        "poem": fetch_news.get_recent_extras("poem"),
-    }
-    extras = analyze.daily_extras(recent_extras)
-    if extras.get("tip"):
-        fetch_news.save_extra("tip", extras["tip"].get("topic", ""))
-    if extras.get("quiz"):
-        fetch_news.save_extra("quiz", extras["quiz"].get("question", ""))
-    if extras.get("quote"):
-        fetch_news.save_extra("quote", extras["quote"].get("text", ""))
-    if extras.get("poem"):
-        fetch_news.save_extra("poem", (extras["poem"].get("lines") or [""])[0])
 
     log.info("ساخت گزارش HTML...")
     report_path = generate_report.build_report(
         category_analyses, currencies, iran_usd_toman, forecast_text, political_text,
         gold_coin_prices=gold_coin_prices,
         crypto_market=crypto_market, crypto_text=crypto_text, stock_movers=stock_movers,
-        weather_data=weather_data, rollups=rollups, usd_change_percent=usd_change_percent,
-        stocks_text=stocks_text, iran_usd_toman_series=iran_usd_toman_series,
-        gold_coin_series=gold_coin_series, tip=extras.get("tip"), quiz=extras.get("quiz"),
-        quote=extras.get("quote"), poem=extras.get("poem"),
+        weather_data=weather_data, rollups=rollups,
     )
     log.info(f"گزارش ساخته شد: {report_path}")
 
-    # پیام تلگرام قبلا کاملا متن ساده بود (بدون بولد/بولت/جداکننده) و همه‌چیز به‌هم
-    # چسبیده به‌نظر می‌رسید. اینجا با parse_mode=HTML (تو send_telegram.py) عنوان هر
-    # دسته بولد می‌شه و بین دسته‌ها یه خط جداکننده می‌ذاریم تا از هم مشخص باشن.
-    lines = []
-    for cat, a in category_analyses.items():
-        if not a.get("items"):
-            continue
-        icon = generate_report.CATEGORY_STYLE.get(cat, {}).get("icon", "📰")
-        cat_esc = html.escape(cat)
-        summary = a.get("summary", "")
-        if summary.startswith("خطا در تحلیل خودکار"):
-            body = "⚠️ خلاصه این بخش به‌دلیل خطای موقت آماده نشد (اخبار کامل در فایل پیوست هست)."
-        else:
-            body = html.escape(_smart_truncate(summary, 280))
-        lines.append(f"{icon} <b>{cat_esc}</b>\n{body}")
-    short_summary = "📰 <b>خلاصه اخبار</b>\n\n" + "\n\n➖➖➖➖➖\n\n".join(lines)
-
-    tip, quote, poem = extras.get("tip"), extras.get("quote"), extras.get("poem")
-    if tip and tip.get("text"):
-        tip_topic_esc = html.escape(tip.get("topic", ""))
-        tip_text_esc = html.escape(_smart_truncate(tip["text"], 320))
-        short_summary += f"\n\n➖➖➖➖➖\n\n🎓 <b>نکته آموزشی: {tip_topic_esc}</b>\n{tip_text_esc}"
-    if quote and quote.get("text"):
-        q_text_esc = html.escape(quote["text"])
-        q_author_esc = html.escape(quote.get("author", ""))
-        short_summary += f"\n\n➖➖➖➖➖\n\n💬 «{q_text_esc}»\n<i>- {q_author_esc}</i>"
-    if poem and poem.get("lines"):
-        poem_lines_esc = "\n".join(html.escape(l) for l in poem["lines"])
-        poet_esc = html.escape(poem.get("poet", ""))
-        short_summary += f"\n\n➖➖➖➖➖\n\n📜 {poem_lines_esc}\n<i>- {poet_esc}</i>"
-
-    # سایت/گزارش HTML همیشه بالا (این تابع) ساخته و منتشر می‌شه، ولی پیام تلگرام فقط وقتی
-    # حداقل یک خبر *واقعا* تازه باشه (یا با --force) ارسال می‌شه - دقیقا همون طراحی اصلی
-    # مستندشده در ابتدای fetch_news.py ("فقط وقتی حداقل یک خبر واقعا تازه باشه، پیام
-    # تلگرام/آپدیت واقعا انجام می‌شه") که با باگ بالا (شمارش خبر نمایشی به‌جای خبر تازه)
-    # عملا هیچ‌وقت درست اجرا نمی‌شد. این‌طوری کاربر هر ساعت با یک پیام تلگرام تکراری
-    # (وقتی هیچ خبر تازه‌ای نیست) اسپم نمی‌شه، ولی خود سایت همیشه به‌روزه.
-    if total_new > 0 or args.force:
-        send_telegram.send_report(report_path, short_summary)
-    else:
-        log.info("خبر واقعا جدیدی برای اطلاع‌رسانی تلگرام نبود - فقط سایت آپدیت شد، پیامی ارسال نشد.")
+    short_summary = "📰 خلاصه اخبار:\n\n" + "\n".join(
+        f"- {cat}: {a.get('summary', '')[:150]}" for cat, a in category_analyses.items() if a.get("items")
+    )
+    send_telegram.send_report(report_path, short_summary)
 
 
 if __name__ == "__main__":
