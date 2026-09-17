@@ -20,12 +20,6 @@ import os
 # ---------------------------------------------------------------
 # ۰) کانال‌های خبری تلگرام (از طریق پل RSSHub - t.me/channel_name)
 # ---------------------------------------------------------------
-# نکته مهم: تلگرام خودش RSS نداره، از سرویس عمومی و رایگان RSSHub استفاده می‌کنیم
-# (rsshub.app/telegram/channel/USERNAME). چون در این محیط نمی‌تونستم تلگرام رو باز کنم،
-# یوزرنیم دقیق هرکدوم رو خودت باید پر کنی: تو اپ تلگرام روی نام کانال بزن -> Share -> یوزرنیم
-# (چیزی که با @ شروع می‌شه) رو اینجا جایگزین PLACEHOLDER کن.
-# اگه rsshub.app کند/قطع بود، می‌تونی خودت یک نمونه RSSHub رایگان روی رندر/ورسل دیپلوی کنی
-# (مستندات: https://docs.rsshub.app/deploy/).
 TELEGRAM_CHANNELS = [
     {"name": "وحید هدلاین", "username": "PLACEHOLDER_vahid_headline"},
     {"name": "چرک‌نویس مدیا (CMO)", "username": "PLACEHOLDER_cherlinews"},
@@ -47,7 +41,7 @@ def _telegram_source(channel, tag):
 
 
 # ---------------------------------------------------------------
-# ۱) منابع RSS به تفکیک دسته (گروه‌بندی خواسته‌شده توسط کاربر)
+# ۱) منابع RSS به تفکیک دسته
 # ---------------------------------------------------------------
 RSS_SOURCES = {
     "اقتصادی": [
@@ -134,6 +128,9 @@ BOC_OBSERVATIONS_URL_TMPL = "https://www.bankofcanada.ca/valet/observations/{ser
 
 IRAN_USD_TOMAN_URL = "https://api.tgju.org/v1/market/indicator/summary-table-data/price_dollar_rl"
 
+# ---------------------------------------------------------------
+# ۲.۰) طلا و سکه ایران
+# ---------------------------------------------------------------
 GOLD_COIN_INDICATORS = {
     "طلای ۱۸ عیار": "geram18",
     "طلای ۲۴ عیار": "geram24",
@@ -146,6 +143,9 @@ GOLD_COIN_INDICATORS = {
 TGJU_INDICATOR_URL_TMPL = "https://api.tgju.org/v1/market/indicator/summary-table-data/{slug}"
 TGJU_CHART_URL_TMPL = "https://www.tgju.org/chart/{slug}"
 
+# ---------------------------------------------------------------
+# ۲.۳) هوا و ساعت (تورنتو + مشهد)
+# ---------------------------------------------------------------
 USER_NAME = "امید"
 WEATHER_CITIES = [
     {"name": "تورنتو", "lat": 43.6532, "lon": -79.3832, "tz": "America/Toronto"},
@@ -153,21 +153,26 @@ WEATHER_CITIES = [
 ]
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
+# ---------------------------------------------------------------
+# ۲.۲) برترین شرکت‌ها (روزانه/هفتگی) - از Yahoo Finance
+# ---------------------------------------------------------------
 WATCHLIST_STOCKS = [
-    {"symbol": "aapl.us", "name": "Apple"},
-    {"symbol": "msft.us", "name": "Microsoft"},
-    {"symbol": "nvda.us", "name": "Nvidia"},
-    {"symbol": "amzn.us", "name": "Amazon"},
-    {"symbol": "googl.us", "name": "Google"},
-    {"symbol": "ry.ca", "name": "Royal Bank of Canada"},
-    {"symbol": "shop.ca", "name": "Shopify"},
-    {"symbol": "cnq.ca", "name": "Canadian Natural Resources"},
-    {"symbol": "enb.ca", "name": "Enbridge"},
-    {"symbol": "td.ca", "name": "TD Bank"},
+    {"symbol": "AAPL", "name": "Apple"},
+    {"symbol": "MSFT", "name": "Microsoft"},
+    {"symbol": "NVDA", "name": "Nvidia"},
+    {"symbol": "AMZN", "name": "Amazon"},
+    {"symbol": "GOOGL", "name": "Google"},
+    {"symbol": "RY.TO", "name": "Royal Bank of Canada"},
+    {"symbol": "SHOP.TO", "name": "Shopify"},
+    {"symbol": "CNQ.TO", "name": "Canadian Natural Resources"},
+    {"symbol": "ENB.TO", "name": "Enbridge"},
+    {"symbol": "TD.TO", "name": "TD Bank"},
 ]
-STOOQ_QUOTE_URL_TMPL = "https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlc&h&e=csv"
-STOOQ_HISTORY_URL_TMPL = "https://stooq.com/q/d/l/?s={symbol}&i=d"
+YAHOO_CHART_URL_TMPL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=8d"
 
+# ---------------------------------------------------------------
+# ۲.۱) طلا و کریپتوکارنسی
+# ---------------------------------------------------------------
 GOLD_API_KEY = os.environ.get("GOLD_API_KEY", "")
 GOLD_API_URL = "https://www.goldapi.io/api/XAU/USD"
 
