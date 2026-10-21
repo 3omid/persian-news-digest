@@ -1,0 +1,49 @@
+// اپ اندروید خلاصه اخبار: یک پنجره‌ی تمام‌صفحه (WebView) که خودِ سایت اپ رو باز می‌کنه
+// (https://3omid.github.io/persian-news-digest/)، پس هر تغییری تو اپ وب، بدون نصب دوباره
+// اینجا هم دیده می‌شه. نسخه از desktop/package.json میاد (workflow «Build apps» پاسش می‌ده).
+
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.omid.newsdigest'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.omid.newsdigest'
+        minSdk 24
+        // ۳۴ و نه بالاتر: از اندروید ۱۵ (API 35) به بعد، اپ زیر نوار وضعیت کشیده می‌شه
+        targetSdk 34
+        versionCode((project.findProperty('appVersionCode') ?: '1') as int)
+        versionName(project.findProperty('appVersionName') ?: '0.0.0')
+        buildConfigField 'String', 'START_URL', '"https://3omid.github.io/persian-news-digest/"'
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    // یک کلید ثابت همه‌ی نسخه‌ها رو امضا می‌کنه؛ اندروید فقط نسخه‌ی جدیدی رو روی قبلی نصب
+    // می‌کنه که با همون کلید امضا شده باشه. رمزش تو GitHub Secrets (ANDROID_KEYSTORE_PASSWORD) هست.
+    signingConfigs {
+        release {
+            storeFile file('../news-digest.keystore')
+            storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+            keyAlias 'newsdigest'
+            keyPassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

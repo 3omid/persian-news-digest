@@ -73,7 +73,12 @@ RSS_SOURCES = {
         _telegram_source(TELEGRAM_CHANNELS[6], "کانال تلگرام - سیاسی خارجی"),
     ],
     "ورزشی": [
-        {"name": "BBC Persian - ورزشی", "url": "https://feeds.bbci.co.uk/persian/sport/rss.xml", "tag": "ورزش"},
+        # فید ورزشی BBC فارسی (persian/sport/rss.xml) دیگه وجود نداره و به فید اصلی BBC فارسی
+        # ریدایرکت می‌شه - برای همین خبر سیاسی تو بخش ورزشی میومد. جایگزینش: فوتبال ایران از
+        # Google News (جستجوی فارسی Google News از سرورهای خارج خبر ورزشی درستی نمی‌داد).
+        {"name": "فوتبال ایران (Google News)",
+         "url": "https://news.google.com/rss/search?q=Persepolis+OR+Esteghlal+OR+%22Team+Melli%22+OR+Sepahan+OR+Tractor+FC+when:3d&hl=en-US&gl=US&ceid=US:en",
+         "tag": "ورزش ایران"},
         {"name": "BBC Sport (EN)", "url": "https://feeds.bbci.co.uk/sport/rss.xml", "tag": "sport"},
     ],
     "جنگ ایران": [
