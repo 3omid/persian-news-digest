@@ -1,0 +1,5 @@
+# Cloudflare Pages (persian-news-digest.pages.dev): اپ از پوشه‌ی app منتشر می‌شه و
+# functions/ سرور داده‌ی زنده‌ست (/api/data). این فایل بر تنظیمات داشبورد Cloudflare مقدمه.
+name = "persian-news-digest"
+pages_build_output_dir = "app"
+compatibility_date = "2025-01-01"
