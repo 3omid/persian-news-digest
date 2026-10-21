@@ -267,7 +267,24 @@ function categoriesFor(key) {
 const hasPersian = (t) => /[\u0600-\u06FF]/.test(t);
 const translated = new Map(); // تیتر → ترجمه (تو حافظه‌ی سرور، تا یک تیتر دوباره ترجمه نشه)
 
+// اول آدرسی که افزونه‌ی ترجمه‌ی Chrome استفاده می‌کنه (از سرورهای Cloudflare جواب می‌ده و چند تیتر
+// رو با یک درخواست ترجمه می‌کنه)؛ اگه نشد، آدرس معمولی Google Translate (که Cloudflare رو گاهی می‌بنده).
 async function translateBatch(titles) {
+  try {
+    const qs = titles.map((t) => `q=${encodeURIComponent(t)}`).join("&");
+    const resp = await fetch(`https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=fa&${qs}`, {
+      headers: UA, signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) throw new Error(`translate ${resp.status}`);
+    let out = await resp.json();
+    if (titles.length === 1 && typeof out[0] === "string") out = [out];
+    if (!Array.isArray(out) || out.length !== titles.length) throw new Error("translate: count mismatch");
+    titles.forEach((t, i) => {
+      const fa = Array.isArray(out[i]) ? out[i][0] : out[i];
+      if (typeof fa === "string" && fa.trim()) translated.set(t, fa.trim());
+    });
+    return;
+  } catch { /* راه دوم */ }
   const body = new URLSearchParams({ q: titles.join("\n") });
   const resp = await fetch("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=fa&dt=t", {
     method: "POST", body, headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded" }, signal: AbortSignal.timeout(5000),
@@ -285,11 +302,11 @@ async function translateTitles(sections) {
   const batches = [];
   let cur = [], len = 0;
   for (const t of todo) {
-    if (len + t.length > 3500 && cur.length) { batches.push(cur); cur = []; len = 0; }
+    if (len + t.length > 1500 && cur.length) { batches.push(cur); cur = []; len = 0; }
     cur.push(t.replace(/\n/g, " ")); len += t.length + 1;
   }
   if (cur.length) batches.push(cur);
-  await Promise.all(batches.slice(0, 4).map((b) => translateBatch(b).catch(() => {})));
+  await Promise.all(batches.slice(0, 5).map((b) => translateBatch(b).catch(() => {})));
   if (translated.size > 3000) translated.clear();
   for (const s of sections) {
     for (const it of s.items || []) {
@@ -321,7 +338,7 @@ export async function buildData(section, waitUntil) {
   ]);
   const sections = menu.map((m) => makeSection(m, news, priceData?.rates || []));
   await translateTitles(sections);
-  const out = { generated_at: new Date().toISOString(), source: "live", api_version: 4, sections };
+  const out = { generated_at: new Date().toISOString(), source: "live", api_version: 5, sections };
   if (priceData) out.prices = priceData.prices;
   return out;
 }

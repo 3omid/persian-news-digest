@@ -225,19 +225,26 @@ def _translate_titles(sections):
     done = {}
     batch, size = [], 0
     for t in todo + [None]:
-        if t is not None and size + len(t) <= 3500:
+        if t is not None and size + len(t) <= 1500:
             batch.append(t.replace("\n", " "))
             size += len(t) + 1
             continue
         if batch:
             try:
-                resp = requests.post(
-                    "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=fa&dt=t",
-                    data={"q": "\n".join(batch)}, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+                # آدرسی که افزونه‌ی ترجمه‌ی Chrome استفاده می‌کنه (چند تیتر با یک درخواست)
+                resp = requests.get(
+                    "https://clients5.google.com/translate_a/t",
+                    params=[("client", "dict-chrome-ex"), ("sl", "auto"), ("tl", "fa")] + [("q", t) for t in batch],
+                    timeout=15, headers={"User-Agent": "Mozilla/5.0"})
                 resp.raise_for_status()
-                lines = "".join(seg[0] for seg in resp.json()[0]).split("\n")
-                if len(lines) == len(batch):
-                    done.update({orig: fa.strip() for orig, fa in zip(batch, lines) if fa.strip()})
+                out = resp.json()
+                if len(batch) == 1 and isinstance(out[0], str):
+                    out = [out]
+                if len(out) == len(batch):
+                    for orig, fa in zip(batch, out):
+                        fa = fa[0] if isinstance(fa, list) else fa
+                        if isinstance(fa, str) and fa.strip():
+                            done[orig] = fa.strip()
             except Exception as e:
                 log.warning(f"ترجمه انجام نشد: {e}")
         batch, size = ([t.replace("\n", " ")], len(t) + 1) if t is not None else ([], 0)
