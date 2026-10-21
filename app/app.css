@@ -155,3 +155,100 @@ main {
 @keyframes sweep-back { from { transform: translateX(110%) skewX(-12deg); } to { transform: translateX(-110%) skewX(-12deg); } }
 body.picking main { padding-bottom: 170px; }
 @media (prefers-reduced-motion: reduce) { .pk-name, .picker-frame, .sweep { animation: none; } .sweep { display: none; } }
+
+/* --- صفحه اصلی: ساعت، آب‌وهوا، قیمت‌ها --- */
+:root { --up: #15803D; --down: #C0392B; }
+:root[data-mode="dark"] { --up: #4ADE80; --down: #F87171; }
+.home-top { display: grid; gap: 12px; margin-bottom: 12px; }
+@media (min-width: 900px) { .home-top { grid-template-columns: 1fr 1fr; align-items: stretch; } }
+.home-col { display: flex; flex-direction: column; min-width: 0; }
+.row-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 2px 8px; font-weight: 800; font-size: 15px; }
+.row-title a, .row-link { font-size: 12px; font-weight: 600; color: var(--muted); text-decoration: none; }
+
+/* درخشش آرومی که هر چند ثانیه از روی کارت رد می‌شه (sp-shine اپ شیفت) */
+.shine, .wx { position: relative; }
+.shine-layer { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.shine-layer::after {
+  content: ""; position: absolute; top: -30%; bottom: -30%; left: 0; width: 34%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.08) 28%, rgba(255,255,255,.3) 50%, rgba(255,255,255,.08) 72%, transparent 100%);
+  transform: translateX(-260%) skewX(-18deg);
+  animation: shine 11s cubic-bezier(.45,.05,.35,1) var(--shine-delay, 1.5s) infinite;
+}
+@keyframes shine { 0%, 76% { transform: translateX(-260%) skewX(-18deg); } 100% { transform: translateX(560%) skewX(-18deg); } }
+
+.clock-card {
+  background: var(--clock-g); color: #fff; border-radius: calc(var(--radius) + 4px);
+  padding: 14px 12px 10px; box-shadow: 0 6px 14px rgba(0,0,0,.18);
+  display: flex; flex-direction: column; justify-content: center; --shine-delay: .6s;
+}
+.clock-pair { display: flex; align-items: center; gap: 8px; }
+.clock { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.clock .analog { flex: none; }
+.clock-text { min-width: 0; }
+.clock-city { font-size: 12.5px; font-weight: 800; opacity: .9; }
+.clock-digital { font-size: 20px; font-weight: 800; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.clock-date { font-size: 11px; opacity: .88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clock-sep { width: 1px; align-self: stretch; background: rgba(255,255,255,.3); }
+.clock-diff { margin-top: 8px; text-align: center; font-size: 11.5px; opacity: .85; }
+@media (max-width: 380px) { .clock .analog { width: 46px; height: 46px; } .clock-digital { font-size: 17px; } }
+
+.wx-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; flex: 1; }
+.wx {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 2px; min-height: 108px;
+  padding: 10px 11px; border-radius: var(--radius); color: #fff; text-decoration: none;
+  box-shadow: 0 4px 10px rgba(0,0,0,.14); --shine-delay: 2.4s;
+}
+.wx:active { transform: scale(.97); }
+.wx-loading { background: var(--card); color: var(--muted); border: 1px solid var(--border); box-shadow: none; align-items: center; justify-content: center; }
+.wx-top { display: flex; justify-content: space-between; align-items: center; }
+.wx-city { font-weight: 800; font-size: 13.5px; }
+.wx-emoji { font-size: 24px; line-height: 1; }
+.wx-temp { font-size: 30px; font-weight: 800; line-height: 1.1; }
+.wx-range { font-size: 11.5px; opacity: .92; white-space: nowrap; }
+
+.prices-card {
+  display: block; margin-bottom: 14px; padding: 12px 14px 6px;
+  background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px);
+  color: inherit; text-decoration: none;
+}
+.prices-card .row-title { margin: 0 0 4px; }
+.px-list { display: grid; }
+@media (min-width: 760px) { .px-list { grid-template-columns: 1fr 1fr; column-gap: 24px; } }
+.px { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+.px-name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.px-val { text-align: left; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.35; }
+.px-val b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.px-val .unit { display: none; }
+.px .spark { display: block; }
+.chg { font-size: 11px; font-weight: 800; padding: 0 6px; border-radius: 999px; }
+.chg.up { color: var(--up); background: color-mix(in srgb, var(--up) 14%, transparent); }
+.chg.down { color: var(--down); background: color-mix(in srgb, var(--down) 14%, transparent); }
+.chg.flat { color: var(--muted); }
+.px.big { padding: 14px 16px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+.px.big .px-name { font-size: 15px; white-space: normal; line-height: 1.5; }
+.px.big .px-val b { font-size: 18px; }
+.px.big .px-val .unit { display: inline; font-size: 11px; color: var(--muted); }
+.px.big .spark { width: 100px; height: 34px; }
+.sub-title { margin: 18px 2px 8px; font-size: 14px; font-weight: 800; color: var(--muted); }
+
+/* صفحه‌ی پیش‌بینی آب‌وهوا */
+.wx-pages { display: grid; gap: 12px; }
+@media (min-width: 900px) { .wx-pages { grid-template-columns: repeat(3, 1fr); } }
+.wx-page { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.wx-head { color: #fff; padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.wx-cond { font-size: 12.5px; opacity: .9; }
+.wx-big { font-size: 30px; font-weight: 800; white-space: nowrap; }
+.wx-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; opacity: .92; }
+.wx-days { padding: 4px 14px 8px; }
+.wx-day { display: grid; grid-template-columns: 1fr 32px 56px auto; align-items: center; gap: 6px; padding: 8px 0; font-size: 13.5px; }
+.wx-day + .wx-day { border-top: 1px solid var(--border); }
+.wx-day-emoji { font-size: 20px; text-align: center; }
+.wx-day-rain { font-size: 11.5px; color: var(--muted); }
+.wx-day-temp { white-space: nowrap; color: var(--muted); }
+.wx-day-temp b { color: var(--text); }
+.note { margin: 12px 2px; font-size: 11.5px; color: var(--muted); }
+
+.badge-new { display: inline-block; padding: 0 7px; border-radius: 999px; background: var(--accent2, #F59F00); color: #fff; font-size: 11px; font-weight: 800; }
+.tile .new-count { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.95); color: #1B2230; font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
+.version { margin: 14px 0 0; text-align: center; font-size: 11px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .shine-layer::after { animation: none; display: none; } }

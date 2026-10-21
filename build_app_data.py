@@ -91,7 +91,7 @@ def _fetch_all_categories():
                 if it["title"] in seen_titles:
                     continue
                 seen_titles.add(it["title"])
-                items.append(dict(it, source=src["name"].replace("تلگرام: ", "")))
+                items.append(_clean_google_news(dict(it, source=src["name"].replace("تلگرام: ", ""))))
         # خبرهای بدون تاریخ میرن ته لیست
         items.sort(key=lambda x: x["published"] or "", reverse=True)
         result[category] = items[:ITEMS_PER_CATEGORY]
@@ -122,6 +122,76 @@ def _rates_snapshot():
     except Exception as e:
         log.warning(f"خطا در قیمت طلا: {e}")
     return rows
+
+
+def _clean_google_news(item):
+    """تیترهای Google News آخرشون « - اسم سایت» دارن؛ اسم سایت رو جدا می‌کنیم و منبع می‌کنیم."""
+    if "news.google.com" in item.get("link", "") and " - " in item["title"]:
+        title, _, publisher = item["title"].rpartition(" - ")
+        if title and publisher and len(publisher) < 60:
+            item["title"], item["source"] = title.strip(), publisher.strip()
+    return item
+
+
+SPARK_DAYS = 30
+# قیمت‌های صفحه اصلی (به ترتیب نمایش): کلید، عنوان، شاخص tgju (None = حساب‌شده)
+DASHBOARD_PRICES = [
+    ("usd", "دلار آمریکا", "price_dollar_rl"),
+    ("cad", "دلار کانادا", None),
+    ("sekee", "سکه تمام (امامی)", "sekee"),
+    ("nim", "نیم سکه", "nim"),
+    ("geram18", "طلای ۱۸ عیار (گرم)", "geram18"),
+]
+
+
+def _pct(now, prev):
+    return round((now - prev) / prev * 100, 2) if now and prev else None
+
+
+def _dashboard_prices():
+    """
+    قیمت‌های کوچیک صفحه اصلی: قیمت الان (تومان)، درصد تغییر روزانه، و قیمت ۳۰ روز اخیر برای
+    نمودار کوچیک (sparkline). دلار کانادا به تومان مستقیم منتشر نمی‌شه و از دلار/تومان ÷ USD/CAD
+    حساب می‌شه (همون روش گزارش).
+    """
+    import fetch_rates
+
+    def safe(func, default):
+        try:
+            return func()
+        except Exception as e:
+            log.warning(f"خطا در قیمت‌های صفحه اصلی: {e}")
+            return default
+
+    usd_hist = safe(fetch_rates.get_iran_usd_toman_series, [])
+    usd_cad_hist = safe(lambda: fetch_rates.get_currency_series("FXUSDCAD"), [])
+    usd_now = safe(fetch_rates.get_iran_usd_toman, None)
+    gold_now = safe(fetch_rates.get_gold_coin_prices, {})
+    gold_by_slug = {v["slug"]: v["price"] for k, v in gold_now.items() if not v.get("approx")}
+
+    out = []
+    for key, label, slug in DASHBOARD_PRICES:
+        if key == "usd":
+            now, hist = usd_now, usd_hist
+        elif key == "cad":
+            hist = fetch_rates.compute_cad_toman_series(usd_hist, usd_cad_hist)
+            now = usd_now / usd_cad_hist[-1][1] if usd_now and usd_cad_hist else None
+        else:
+            now = gold_by_slug.get(slug)
+            hist = safe(lambda: fetch_rates._get_tgju_history_series(
+                config.TGJU_INDICATOR_URL_TMPL.format(slug=slug)), [])
+        if not now:
+            continue
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        past = [v for d, v in hist if d < today][-SPARK_DAYS:]
+        change = fetch_rates._live_price_and_change(slug)[1] if slug else None
+        if change is None or abs(change) > 30:
+            change = _pct(now, past[-1] if past else None)
+        out.append({
+            "key": key, "label": label, "value": round(now), "unit": "تومان",
+            "change": change, "spark": [round(v) for v in past] + [round(now)],
+        })
+    return out
 
 
 def _unique(groups, per_group=None):
@@ -169,6 +239,7 @@ def build(output_path=DEFAULT_OUTPUT):
     data = {
         "generated_at": now.isoformat(),
         "generated_at_label": format_dual_date(now),
+        "prices": _dashboard_prices(),
         "sections": sections,
     }
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)

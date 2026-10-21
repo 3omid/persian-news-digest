@@ -35,7 +35,21 @@
       </button>
     </header>
 
-    <section id="menu" class="menu" aria-label="دسته‌ها"></section>
+    <section id="home">
+      <div class="home-top">
+        <div id="clocks" class="clock-card shine"></div>
+        <div class="home-col">
+          <div class="row-title"><span>🌦 آب‌وهوا</span><a href="#weather">پیش‌بینی ۵ روزه ‹</a></div>
+          <div id="wx-row" class="wx-row"></div>
+        </div>
+      </div>
+      <a id="prices-card" class="prices-card" href="#gold_currency">
+        <div class="row-title"><span>💰 طلا و ارز</span><span class="row-link">همه‌ی قیمت‌ها ‹</span></div>
+        <div id="px-list" class="px-list"></div>
+      </a>
+      <div class="row-title"><span>📰 اخبار</span><span id="news-updated" class="row-link"></span></div>
+      <section id="menu" class="menu" aria-label="دسته‌ها"></section>
+    </section>
     <section id="section" class="section" hidden></section>
 
     <div id="install" class="install" hidden>
@@ -46,6 +60,7 @@
 
     <a id="report-link" class="report-link" href="report.html">📄 گزارش کامل ساعتی (با تحلیل و نمودار)</a>
     <a id="downloads" class="report-link" href="https://github.com/3omid/persian-news-digest/releases/latest" target="_blank" rel="noopener">⬇️ دانلود نسخه‌ی اندروید و ویندوز</a>
+    <p id="version" class="version"></p>
   </main>
 
   <div id="picker" class="picker" hidden>
@@ -74,6 +89,7 @@
     </div>
   </div>
 
+  <script src="home.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

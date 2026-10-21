@@ -38,6 +38,7 @@ const Theme = (() => {
     const vars = {
       "--bg": p.bg, "--card": p.card, "--border": p.border, "--text": p.text, "--muted": p.muted, "--accent": p.accent,
       "--radius": th.radius || "12px", "--hero-g": g(th.hero), "--hero": th.hero[0], "--my-g": g(th.my), "--my": th.my[0],
+      "--clock-g": `${gloss}linear-gradient(120deg, ${th.clock.join(", ")})`, "--accent2": th.accent2[m === "dark" ? 1 : 0],
     };
     th.tiles.forEach((pair, i) => { vars[`--t${i}-g`] = g(pair); vars[`--t${i}`] = pair[0]; });
     const root = document.documentElement;

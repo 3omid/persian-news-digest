@@ -14,6 +14,10 @@ const backBtn = $("back");
 const refreshBtn = $("refresh");
 
 const APP_TITLE = "خلاصه اخبار";
+// نسخه‌ی اپ - با desktop/package.json یکی نگهش دار (نسخه‌ی اندروید/ویندوز از اون‌جا میاد)
+const APP_VERSION = "1.0.0";
+const homeEl = $("home");
+const NEW_MINUTES = 60;
 const CACHE_KEY = "newsData";
 const faNum = new Intl.NumberFormat("fa-IR");
 const inNativeApp = /Electron|NewsDigestAndroid/.test(navigator.userAgent);
@@ -45,6 +49,7 @@ function timeAgo(iso) {
 }
 
 const isLatin = (s) => /^[\s\W\d]*[A-Za-z]/.test(s);
+const isNew = (it) => it.published && Date.now() - new Date(it.published).getTime() < NEW_MINUTES * 60000;
 
 // رنگ هر دکمه از تم: ۷ رنگ کاشی‌های اپ شیفت، و «همه اخبار» رنگ کارت «شیفت من».
 function tileVar(s, i) {
@@ -90,8 +95,10 @@ function renderMenu() {
     const [emoji, text] = splitLabel(s.label);
     const v = tileVar(s, i);
     const wide = s.key === "all" ? " wide" : "";
+    const fresh = s.type === "news" ? s.items.filter(isNew).length : 0;
     const peek = s.key === "all" ? "" : `<span class="peek"${isLatin(sectionPeek(s)) ? ' dir="ltr"' : ""}>${esc(sectionPeek(s))}</span>`;
     return `<button class="tile${wide}" data-key="${esc(s.key)}" style="background: var(--${v}-g)">
+      ${fresh ? `<span class="new-count">${faNum.format(fresh)} تازه</span>` : ""}
       <span class="emoji">${emoji}</span>
       <span class="label">${esc(text)}</span>
       ${peek}
@@ -106,6 +113,7 @@ function renderNews(items) {
     <li><a href="${esc(it.link)}" target="_blank" rel="noopener">
       <p class="title"${isLatin(it.title) ? ' dir="ltr"' : ""}>${esc(it.title)}</p>
       <div class="meta">
+        ${isNew(it) ? `<span class="badge-new">تازه</span>` : ""}
         ${it.category ? `<span class="chip">${esc(it.category)}</span>` : ""}
         <span>${esc(it.source)}</span>
         ${it.published ? `<span>${timeAgo(it.published)}</span>` : ""}
@@ -115,24 +123,43 @@ function renderNews(items) {
 
 function renderRates(rates) {
   if (!rates.length) return `<div class="empty">فعلاً قیمت‌ها در دسترس نیست.</div>`;
-  return `<div class="rates">${rates.map((r) => `
+  const top = data.prices?.length
+    ? `${Home.renderPrices(data.prices, { big: true })}<h3 class="sub-title">همه‌ی قیمت‌ها</h3>` : "";
+  return `${top}<div class="rates">${rates.map((r) => `
     <div class="rate-row">
       <span>${esc(r.label)}</span>
       <span class="value">${faNum.format(r.value)}<span class="unit">${esc(r.unit)}</span></span>
     </div>`).join("")}</div>`;
 }
 
+function showPage(title, html, gradient, accent) {
+  homeEl.hidden = true;
+  sectionEl.hidden = false;
+  backBtn.hidden = false;
+  titleEl.textContent = title;
+  heroEl.style.background = gradient;
+  sectionEl.style.setProperty("--sec", accent);
+  sectionEl.innerHTML = html;
+}
+
 function render() {
+  const key = decodeURIComponent(location.hash.slice(1));
+  // صفحه‌ی آب‌وهوا به data.json وابسته نیست
+  if (key === "weather") {
+    showPage("🌦 آب‌وهوا", Home.renderWeatherPage(), "var(--clock-g)", "var(--accent)");
+    return;
+  }
   if (!data) return;
   updatedEl.textContent = `به‌روزرسانی: ${timeAgo(data.generated_at)}`;
   updatedEl.title = data.generated_at_label || "";
 
-  const key = decodeURIComponent(location.hash.slice(1));
   const idx = data.sections.findIndex((s) => s.key === key);
   const section = data.sections[idx];
   if (!section) {
     renderMenu();
-    menuEl.hidden = false;
+    $("px-list").innerHTML = Home.renderPrices(data.prices) || `<p class="note">قیمت‌ها در دسترس نیست</p>`;
+    $("news-updated").textContent = timeAgo(data.generated_at);
+    homeEl.hidden = false;
     sectionEl.hidden = true;
     backBtn.hidden = true;
     titleEl.textContent = APP_TITLE;
@@ -141,13 +168,8 @@ function render() {
   }
   // تو هر بخش، بنر بالا و خط کنار خبرها رنگ همون دکمه رو می‌گیرن
   const v = tileVar(section, idx);
-  heroEl.style.background = `var(--${v}-g)`;
-  sectionEl.style.setProperty("--sec", `var(--${v})`);
-  menuEl.hidden = true;
-  sectionEl.hidden = false;
-  backBtn.hidden = false;
-  titleEl.textContent = section.label;
-  sectionEl.innerHTML = section.type === "rates" ? renderRates(section.rates) : renderNews(section.items);
+  showPage(section.label, section.type === "rates" ? renderRates(section.rates) : renderNews(section.items),
+    `var(--${v}-g)`, `var(--${v})`);
 }
 
 menuEl.addEventListener("click", (e) => {
@@ -159,11 +181,14 @@ backBtn.addEventListener("click", () => {
   if (history.length > 1) history.back();
   else location.hash = "";
 });
-refreshBtn.addEventListener("click", () => load({ force: true }));
+refreshBtn.addEventListener("click", () => {
+  load({ force: true });
+  Home.mountWeather($("wx-row"), true).then(() => { if (location.hash === "#weather") render(); });
+});
 window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
 document.addEventListener("visibilitychange", () => {
   // وقتی دوباره اپ رو باز می‌کنی، داده رو بی‌صدا تازه کن
-  if (document.visibilityState === "visible") load();
+  if (document.visibilityState === "visible") { load(); Home.mountWeather($("wx-row")); }
 });
 
 // --- انتخاب تم (مثل اپ شیفت) ---
@@ -268,5 +293,8 @@ if ("serviceWorker" in navigator) {
 
 // شروع: اول فوری با داده‌ی ذخیره‌شده، بعد نسخه‌ی تازه از اینترنت
 try { data = JSON.parse(store.get(CACHE_KEY)); } catch (e) { data = null; }
+$("version").textContent = `نسخه ${APP_VERSION.replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d])}`;
+Home.mountClocks($("clocks"));
+Home.mountWeather($("wx-row")).then(() => { if (location.hash === "#weather") render(); });
 render();
 load();

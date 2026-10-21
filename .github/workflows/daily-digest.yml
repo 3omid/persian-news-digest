@@ -32,8 +32,11 @@ permissions:
   pages: write
   id-token: write
 
+# اسم گروه عوض شد: از حدود ۳۰ سپتامبر همه‌ی اجراها تو گروه قبلی ("pages") بدون شروع هیچ
+# job ای «pending» می‌موندن تا اجرای بعدی جاشون رو بگیره (یک جای گیرکرده تو صف خودِ گیت‌هاب) -
+# برای همین سایت سه هفته به‌روز نشده بود. گروه تازه از اون صف گیرکرده جداست.
 concurrency:
-  group: "pages"
+  group: news-site-deploy
   cancel-in-progress: false
 
 jobs:
