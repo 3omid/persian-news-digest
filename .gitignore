@@ -3,3 +3,4 @@ __pycache__/
 seen_news.db
 output/
 app/data.json
+.wrangler/

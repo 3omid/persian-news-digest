@@ -56,12 +56,35 @@ function tileVar(s, i) {
   return s.key === "all" ? "my" : `t${i % 7}`;
 }
 
+// داده‌ی زنده از سرور Cloudflare (functions/api/data.js، حداکثر چند دقیقه قدیمی). اگه در دسترس
+// نبود، data.json که GitHub Actions می‌سازه (کندتر به‌روز می‌شه، ولی همیشه هست).
+const LIVE_API = location.hostname.endsWith(".pages.dev") ? "api/data" : "https://persian-news-digest.pages.dev/api/data";
+
+async function fetchText(url, opts = {}, timeoutMs = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { ...opts, signal: ctrl.signal });
+    if (!resp.ok) throw new Error(resp.status);
+    return await resp.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchData(force) {
+  try {
+    // بار اول بعد از خالی شدن کش، سرور چند ثانیه منبع‌ها رو می‌گیره؛ بعدش فوریه
+    const text = await fetchText(LIVE_API, {}, 12000);
+    if (JSON.parse(text).sections) return text;
+  } catch (e) { /* میریم سراغ data.json */ }
+  return fetchText("data.json", { cache: force ? "reload" : "no-cache" });
+}
+
 async function load({ force = false } = {}) {
   refreshBtn.classList.add("spinning");
   try {
-    const resp = await fetch("data.json", { cache: force ? "reload" : "no-cache" });
-    if (!resp.ok) throw new Error(resp.status);
-    const text = await resp.text();
+    const text = await fetchData(force);
     data = JSON.parse(text);
     store.set(CACHE_KEY, text);
     render();
@@ -261,6 +284,8 @@ const standalone = matchMedia("(display-mode: standalone)").matches || navigator
 const dismissed = store.get("installDismissed") === "1";
 let deferredPrompt = null;
 if (inNativeApp) $("downloads").hidden = true;
+// گزارش ساعتی فقط روی GitHub Pages ساخته می‌شه
+if (location.hostname.endsWith(".pages.dev")) $("report-link").href = "https://3omid.github.io/persian-news-digest/report.html";
 
 if (!standalone && !dismissed) {
   if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
