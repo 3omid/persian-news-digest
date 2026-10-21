@@ -2,8 +2,10 @@ name: Persian News Digest
 
 on:
   schedule:
-    # هر ساعت اجرا می‌شه؛ اگه خبر جدیدی نباشه، main.py خودش گزارش نمی‌سازه
+    # سر هر ساعت: گزارش کامل (اگه خبر جدیدی نباشه، main.py خودش گزارش نمی‌سازه) + داده‌ی اپ
     - cron: "0 * * * *"
+    # هر ۱۵ دقیقه بین ساعت‌ها: فقط داده‌ی اپ موبایل (آخرین خبرها/قیمت‌ها) تازه می‌شه - بدون هزینه‌ی هوش مصنوعی
+    - cron: "15,30,45 * * * *"
   workflow_dispatch:
     inputs:
       category:
@@ -30,8 +32,11 @@ permissions:
   pages: write
   id-token: write
 
+# اسم گروه عوض شد: از حدود ۳۰ سپتامبر همه‌ی اجراها تو گروه قبلی ("pages") بدون شروع هیچ
+# job ای «pending» می‌موندن تا اجرای بعدی جاشون رو بگیره (یک جای گیرکرده تو صف خودِ گیت‌هاب) -
+# برای همین سایت سه هفته به‌روز نشده بود. گروه تازه از اون صف گیرکرده جداست.
 concurrency:
-  group: "pages"
+  group: news-site-deploy
   cancel-in-progress: false
 
 jobs:
@@ -60,8 +65,18 @@ jobs:
           restore-keys: |
             seen-news-db-
 
+      # آخرین گزارش ساخته‌شده کش می‌شه تا اجراهای «فقط اپ» (و ساعت‌هایی که خبر جدیدی نبوده)
+      # هم بتونن همون گزارش قبلی رو کنار اپ منتشر کنن، نه این‌که لینک گزارش خراب بشه.
+      - name: Restore latest report (cache)
+        uses: actions/cache@v4
+        with:
+          path: output/latest.html
+          key: latest-report-${{ github.run_id }}
+          restore-keys: |
+            latest-report-
+
       - name: Run digest (scheduled)
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
         env:
           MODEL_PROVIDER: gemini
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -90,16 +105,28 @@ jobs:
           fi
           eval python main.py $ARGS
 
+      - name: Build mobile app data
+        env:
+          GOLD_API_KEY: ${{ secrets.GOLD_API_KEY }}
+        run: python build_app_data.py app/data.json
+
       - name: Upload report as artifact (دانلود دستی از تب Actions)
         uses: actions/upload-artifact@v4
         with:
           name: news-digest-${{ github.run_id }}
           path: output/
+          if-no-files-found: ignore
 
       - name: Prepare GitHub Pages files
         run: |
           mkdir -p pages_output
-          cp output/latest.html pages_output/index.html
+          # صفحه‌ی اصلی سایت = اپ موبایل؛ گزارش کامل ساعتی تو report.html
+          cp -r app/. pages_output/
+          if [ -f output/latest.html ]; then
+            cp output/latest.html pages_output/report.html
+          else
+            printf '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>گزارش</title><p dir="rtl" style="font-family:Tahoma,sans-serif;padding:24px">گزارش کامل هنوز ساخته نشده - سر ساعت بعد دوباره سر بزن. <a href="./">برگشت به اپ</a></p>' > pages_output/report.html
+          fi
           # فونت سلف‌هاست‌شده (فعلا Vazirmatn، هرچی که در آینده جایگزینش بشه - assets/fonts)
           # هم باید کنار index.html منتشر بشه، وگرنه CSS داخل گزارش که به مسیر نسبی
           # assets/fonts/... اشاره می‌کنه رو GitHub Pages به ۴۰۴ می‌خوره و گزارش دوباره

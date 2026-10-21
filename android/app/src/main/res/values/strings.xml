@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">خلاصه اخبار</string>
+    <string name="offline">اینترنت وصل نیست. وقتی وصل شد، دوباره اپ رو باز کن.</string>
+</resources>

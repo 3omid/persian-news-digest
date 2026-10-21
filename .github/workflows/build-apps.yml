@@ -1,0 +1,108 @@
+name: Build apps (Windows + Android)
+
+# نسخه‌ی ویندوز (نصبی + پرتابل، روی ماشین ویندوز) و نسخه‌ی اندروید (.apk) رو می‌سازه و به یک
+# GitHub Release با اسم نسخه (مثلا app-v1.0.0) وصل می‌کنه - مثل workflow اپ شیفت.
+# خودکار اجرا می‌شه وقتی version تو desktop/package.json روی main عوض بشه، یا هر وقت خواستی
+# از Actions > Build apps > Run workflow.
+# هر دو اپ خودِ سایت رو باز می‌کنن، پس برای تغییرات معمولی اپ (app/) نیازی به نسخه‌ی جدید نیست.
+on:
+  push:
+    branches: [main]
+    paths: [desktop/package.json]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: app-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: ver
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the installer and the portable app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Attach to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-v${{ steps.ver.outputs.version }}
+          name: خلاصه اخبار ${{ steps.ver.outputs.version }}
+          body: |
+            دانلودهای نسخه‌ی ${{ steps.ver.outputs.version }}:
+            - NewsDigest-Setup-${{ steps.ver.outputs.version }}.exe — نصب روی ویندوز (منوی استارت + میانبر دسکتاپ)
+            - NewsDigest-Portable-${{ steps.ver.outputs.version }}.exe — بدون نصب، فقط اجرا کن
+            - NewsDigest-Android-${{ steps.ver.outputs.version }}.apk — اندروید (روی گوشی باز کن و نصب کن)
+            هر سه، خودِ سایت اپ رو باز می‌کنن و خودشون به‌روز می‌مونن.
+          files: |
+            desktop/release/NewsDigest-Setup-*.exe
+            desktop/release/NewsDigest-Portable-*.exe
+          fail_on_unmatched_files: true
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: ver
+        shell: bash
+        run: |
+          now=$(node -p "require('./desktop/package.json').version")
+          IFS=. read -r a b c <<< "$now"
+          echo "version=$now" >> "$GITHUB_OUTPUT"
+          echo "code=$((a * 10000 + b * 100 + c))" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build the signed .apk
+        id: apk
+        working-directory: android
+        env:
+          # رمز کلید امضا (android/news-digest.keystore) - تو Settings > Secrets and variables > Actions
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "::warning::سیکرت ANDROID_KEYSTORE_PASSWORD تنظیم نشده - نسخه‌ی اندروید ساخته نشد. (Settings > Secrets and variables > Actions)"
+            exit 0
+          fi
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease -PappVersionCode=${{ steps.ver.outputs.code }} -PappVersionName=${{ steps.ver.outputs.version }}
+          mkdir -p ../release
+          cp app/build/outputs/apk/release/app-release.apk ../release/NewsDigest-Android-${{ steps.ver.outputs.version }}.apk
+          echo "built=true" >> "$GITHUB_OUTPUT"
+
+      - name: Attach to the release
+        if: steps.apk.outputs.built == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-v${{ steps.ver.outputs.version }}
+          name: خلاصه اخبار ${{ steps.ver.outputs.version }}
+          files: release/NewsDigest-Android-*.apk
+          fail_on_unmatched_files: true
