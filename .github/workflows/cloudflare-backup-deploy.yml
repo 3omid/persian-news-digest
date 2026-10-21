@@ -1,0 +1,65 @@
+name: Cloudflare backup deploy
+
+# راه دوم انتشار روی Cloudflare (persian-news-digest.pages.dev).
+# راه اول: خودِ Cloudflare هر پوش روی main رو می‌گیره و منتشر می‌کنه.
+# این workflow بعد از هر پوش تا ۸ دقیقه صبر می‌کنه؛ اگه Cloudflare خودش منتشر نکرده باشه
+# (علامت «Cloudflare Pages: success» روی همون commit نیومده باشه)، خودش با wrangler منتشر می‌کنه.
+# از Actions > Cloudflare backup deploy > Run workflow هم می‌شه دستی (بی‌معطلی) منتشر کرد.
+# دو سیکرت لازم داره: CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID.
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", "functions/**", "cloudflare/**", "wrangler.toml"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: cloudflare-backup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Secrets present?
+        id: secrets
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
+            echo "::warning::سیکرت‌های CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID تنظیم نشدن - راه دوم انتشار غیرفعاله."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Did Cloudflare deploy this commit by itself?
+        id: auto
+        if: steps.secrets.outputs.ok == 'true' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 16); do
+            state=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+              --jq '[.check_runs[] | select(.app.slug == "cloudflare-workers-and-pages")] | first | .conclusion // .status // "none"' 2>/dev/null || echo none)
+            echo "Cloudflare: $state"
+            if [ "$state" = "success" ]; then echo "deployed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+            if [ "$state" = "failure" ]; then break; fi
+            sleep 30
+          done
+          echo "deployed=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::Cloudflare این commit رو خودش منتشر نکرد - با راه دوم منتشر می‌شه."
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ok == 'true' && steps.auto.outputs.deployed != 'true'
+
+      - name: Deploy with wrangler
+        if: steps.secrets.outputs.ok == 'true' && steps.auto.outputs.deployed != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 pages deploy --branch=main --commit-hash=${{ github.sha }}

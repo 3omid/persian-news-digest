@@ -252,3 +252,11 @@ body.picking main { padding-bottom: 170px; }
 .tile .new-count { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.95); color: #1B2230; font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
 .version { margin: 14px 0 0; text-align: center; font-size: 11px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .shine-layer::after { animation: none; display: none; } }
+
+/* خبری که همین الان رسیده: چند ثانیه با رنگ تم مشخص می‌شه */
+.news li.just-in a { animation: just-in 6s ease-out; }
+@keyframes just-in {
+  0%, 40% { background: color-mix(in srgb, var(--sec, var(--accent)) 16%, var(--card)); }
+  100% { background: var(--card); }
+}
+@media (prefers-reduced-motion: reduce) { .news li.just-in a { animation: none; background: color-mix(in srgb, var(--sec, var(--accent)) 10%, var(--card)); } }

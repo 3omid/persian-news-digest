@@ -81,11 +81,29 @@ async function fetchData(force) {
   return fetchText("data.json", { cache: force ? "reload" : "no-cache" });
 }
 
+// تیتر خبرهایی که همین الان رسیدن (تو داده‌ی قبلی نبودن) - چند ثانیه رنگی نشون داده می‌شن
+const justIn = new Set();
+const titlesOf = (sections) => new Set((sections || []).flatMap((s) => (s.items || []).map((it) => it.title)));
+function markJustIn(oldSections, newSections) {
+  if (!oldSections) return;
+  const old = titlesOf(oldSections);
+  for (const t of titlesOf(newSections)) if (!old.has(t)) justIn.add(t);
+  setTimeout(() => justIn.clear(), 15000);
+}
+
+let loading = 0;
+function busy(on) {
+  loading += on ? 1 : -1;
+  refreshBtn.classList.toggle("spinning", loading > 0);
+}
+
 async function load({ force = false } = {}) {
-  refreshBtn.classList.add("spinning");
+  busy(true);
   try {
     const text = await fetchData(force);
-    data = JSON.parse(text);
+    const fresh = JSON.parse(text);
+    markJustIn(data?.sections, fresh.sections);
+    data = fresh;
     store.set(CACHE_KEY, text);
     render();
   } catch (e) {
@@ -96,7 +114,29 @@ async function load({ force = false } = {}) {
       updatedEl.textContent = `آفلاین · آخرین به‌روزرسانی: ${timeAgo(data.generated_at)}`;
     }
   } finally {
-    refreshBtn.classList.remove("spinning");
+    busy(false);
+  }
+}
+
+// وقتی یک دکمه زده می‌شه: اول خبرهای ذخیره‌شده فوری، بعد همون بخش زنده از سرور
+async function refreshSection(key) {
+  if (!data || !key || key === "weather" || !data.sections.some((s) => s.key === key)) return;
+  busy(true);
+  try {
+    const fresh = JSON.parse(await fetchText(`${LIVE_API}?section=${encodeURIComponent(key)}`, {}, 10000));
+    const sec = fresh.sections?.[0];
+    if (!sec || sec.key !== key) return;
+    const idx = data.sections.findIndex((s) => s.key === key);
+    markJustIn([data.sections[idx]], [sec]);
+    data.sections[idx] = sec;
+    if (fresh.prices) data.prices = fresh.prices;
+    data.generated_at = fresh.generated_at;
+    store.set(CACHE_KEY, JSON.stringify(data));
+    if (decodeURIComponent(location.hash.slice(1)) === key) render();
+  } catch (e) {
+    /* بدون اینترنت یا سرور: همون خبرهای ذخیره‌شده می‌مونه */
+  } finally {
+    busy(false);
   }
 }
 
@@ -133,7 +173,7 @@ function renderMenu() {
 function renderNews(items) {
   if (!items.length) return `<div class="empty">فعلاً خبر جدیدی تو این دسته پیدا نشد.</div>`;
   return `<ul class="news">${items.map((it) => `
-    <li><a href="${esc(it.link)}" target="_blank" rel="noopener">
+    <li${justIn.has(it.title) ? ' class="just-in"' : ""}><a href="${esc(it.link)}" target="_blank" rel="noopener">
       <p class="title"${isLatin(it.title) ? ' dir="ltr"' : ""}>${esc(it.title)}</p>
       <div class="meta">
         ${isNew(it) ? `<span class="badge-new">تازه</span>` : ""}
@@ -208,7 +248,18 @@ refreshBtn.addEventListener("click", () => {
   load({ force: true });
   Home.mountWeather($("wx-row"), true).then(() => { if (location.hash === "#weather") render(); });
 });
-window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+window.addEventListener("hashchange", () => {
+  render();
+  window.scrollTo(0, 0);
+  refreshSection(decodeURIComponent(location.hash.slice(1)));
+});
+// تا وقتی اپ بازه، هر ۲ دقیقه خودش خبرهای تازه رو می‌گیره
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+  const key = decodeURIComponent(location.hash.slice(1));
+  if (key && key !== "weather") refreshSection(key);
+  else load();
+}, 2 * 60 * 1000);
 document.addEventListener("visibilitychange", () => {
   // وقتی دوباره اپ رو باز می‌کنی، داده رو بی‌صدا تازه کن
   if (document.visibilityState === "visible") { load(); Home.mountWeather($("wx-row")); }

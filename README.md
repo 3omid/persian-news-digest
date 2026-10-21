@@ -31,7 +31,11 @@
   - نسخه‌ی اندروید یک سیکرت لازم داره: `ANDROID_KEYSTORE_PASSWORD` (رمز `android/news-digest.keystore`).
 - **داده‌ی زنده (Cloudflare):** `functions/api/data.js` روی Cloudflare Pages (آدرس
   `https://persian-news-digest.pages.dev/api/data`) هر بار خبرها و قیمت‌ها رو زنده می‌سازه و
-  ۵ دقیقه کش می‌کنه. همه‌ی نسخه‌های اپ اول از این‌جا می‌خونن و اگه در دسترس نبود، از `data.json`.
+  کمتر از یک دقیقه کش می‌کنه (`?section=…` فقط یک بخش رو می‌ده). اپ موقع باز شدن، موقع زدن هر
+  دکمه و هر ۲ دقیقه (وقتی بازه) تازه‌ترین خبرها رو می‌گیره و خبرِ تازه‌رسیده رو رنگی نشون می‌ده.
+  اگه سرور در دسترس نبود، از `data.json` می‌خونه.
+- **انتشار روی Cloudflare:** خودکار با هر پوش روی `main`. پشتیبانش workflow «Cloudflare backup deploy»
+  هست که اگه Cloudflare خودش منتشر نکرد، با سیکرت‌های `CLOUDFLARE_API_TOKEN` و `CLOUDFLARE_ACCOUNT_ID` منتشر می‌کنه.
   منابع خبری از `config.py` میان: بعد از تغییرشون `python export_app_config.py` رو اجرا کن و
   `cloudflare/app_config.js` رو هم commit کن.
 - **سرعت:** اپ آخرین خبرها رو تو خودِ دستگاه نگه می‌داره و فوری باز می‌شه، بعد تو پس‌زمینه

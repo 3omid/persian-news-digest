@@ -23,8 +23,11 @@ const DASHBOARD_PRICES = [
   { key: "geram18", label: "طلای ۱۸ عیار (گرم)", slug: "geram18" },
 ];
 
-async function get(url, as = "text", timeoutMs = 8000) {
-  const resp = await fetch(url, { headers: UA, signal: AbortSignal.timeout(timeoutMs), cf: { cacheTtl: 120 } });
+// هر منبع حداکثر FEED_TTL ثانیه تو لبه‌ی Cloudflare کش می‌شه (خبر تازه حداکثر یک دقیقه دیرتر)؛
+// منبعی که جواب نده بعد از چند ثانیه کنار گذاشته می‌شه تا بقیه منتظر نمونن.
+const FEED_TTL = 60;
+async function get(url, as = "text", timeoutMs = 6000) {
+  const resp = await fetch(url, { headers: UA, signal: AbortSignal.timeout(timeoutMs), cf: { cacheTtl: FEED_TTL, cacheEverything: true } });
   if (!resp.ok) throw new Error(`${resp.status} ${url}`);
   return as === "json" ? resp.json() : resp.text();
 }
@@ -73,20 +76,38 @@ function cleanGoogleNews(it) {
   return it;
 }
 
-async function fetchAllNews() {
+// منبعی که تا SOFT_MS جواب نده، این‌بار بدون اون جواب می‌دیم (مثلا ایرنا از سرورهای خارج از
+// ایران اصلا جواب نمی‌ده). خودِ درخواستش پشت صحنه (waitUntil) ادامه پیدا می‌کنه و اگه برسه، تو
+// کش لبه می‌مونه و دفعه‌ی بعد فوریه - این‌طوری یک منبع کند کل اپ رو کند نمی‌کنه.
+const SOFT_MS = 2500;
+// منبعی که اخیرا کند بوده: تا SLOW_MEMORY_MS دیگه منتظرش نمی‌مونیم (فقط پشت صحنه امتحانش می‌کنیم)
+const SLOW_MEMORY_MS = 10 * 60 * 1000;
+const slowUntil = new Map();
+
+// categories: فقط این دسته‌ها (برای وقتی یک دکمه زده می‌شه)؛ خالی = همه
+async function fetchAllNews(categories, waitUntil) {
+  const wanted = Object.entries(CONFIG.sources).filter(([cat]) => !categories || categories.includes(cat));
   const unique = new Map();
-  for (const list of Object.values(CONFIG.sources)) for (const s of list) unique.set(s.url, s);
+  for (const [, list] of wanted) for (const s of list) unique.set(s.url, s);
   const fetched = new Map();
   await Promise.all([...unique.keys()].map(async (url) => {
-    try {
-      fetched.set(url, parseFeed(await get(url)));
-    } catch {
-      fetched.set(url, []);
+    const full = get(url).then(parseFeed).catch(() => []);
+    const wait = (slowUntil.get(url) || 0) > Date.now() ? 0 : SOFT_MS;
+    let timer;
+    const late = new Promise((r) => { timer = setTimeout(() => r(null), wait); });
+    const items = await Promise.race([full, late]);
+    clearTimeout(timer);
+    if (items === null) {
+      slowUntil.set(url, Date.now() + SLOW_MEMORY_MS);
+      if (waitUntil) waitUntil(full);
+    } else if (items.length) {
+      slowUntil.delete(url);
     }
+    fetched.set(url, items || []);
   }));
 
   const news = {};
-  for (const [cat, list] of Object.entries(CONFIG.sources)) {
+  for (const [cat, list] of wanted) {
     const seen = new Set();
     const items = [];
     for (const src of list) {
@@ -220,17 +241,40 @@ async function buildPrices() {
 }
 
 // ---------- کل داده ----------
-export async function buildData() {
-  const [news, { prices, rates }] = await Promise.all([fetchAllNews(), buildPrices()]);
-  const sections = CONFIG.menu.map(({ label, key }) => {
-    if (key === "gold_currency") return { key, label, type: "rates", rates };
-    if (key === "all") {
-      return { key, label, type: "news", items: unique(Object.entries(news).map(([cat, items]) => items.map((it) => ({ ...it, category: cat }))), 1) };
-    }
-    if (key === "سیاسی") {
-      return { key, label, type: "news", items: unique(["سیاسی داخلی", "سیاسی خارجی"].map((cat) => (news[cat] || []).map((it) => ({ ...it, category: cat })))) };
-    }
-    return { key, label, type: "news", items: news[key] || [] };
-  });
-  return { generated_at: new Date().toISOString(), source: "live", api_version: 2, prices, sections };
+export const SECTION_KEYS = CONFIG.menu.map((m) => m.key);
+
+// دسته‌های خبری‌ای که یک دکمه لازم داره
+function categoriesFor(key) {
+  if (key === "gold_currency") return [];
+  if (key === "all") return Object.keys(CONFIG.sources);
+  if (key === "سیاسی") return ["سیاسی داخلی", "سیاسی خارجی"];
+  return [key];
+}
+
+function makeSection({ label, key }, news, rates) {
+  if (key === "gold_currency") return { key, label, type: "rates", rates };
+  if (key === "all") {
+    return { key, label, type: "news", items: unique(Object.entries(news).map(([cat, items]) => items.map((it) => ({ ...it, category: cat }))), 1) };
+  }
+  if (key === "سیاسی") {
+    return { key, label, type: "news", items: unique(["سیاسی داخلی", "سیاسی خارجی"].map((cat) => (news[cat] || []).map((it) => ({ ...it, category: cat })))) };
+  }
+  return { key, label, type: "news", items: news[key] || [] };
+}
+
+// section: کلید یک دکمه → فقط داده‌ی همون بخش (سریع‌تر)؛ خالی → همه‌چیز
+export async function buildData(section, waitUntil) {
+  const menu = section ? CONFIG.menu.filter((m) => m.key === section) : CONFIG.menu;
+  const cats = section ? categoriesFor(section) : null;
+  const needPrices = !section || section === "gold_currency";
+  const [news, priceData] = await Promise.all([
+    cats && !cats.length ? {} : fetchAllNews(cats, waitUntil),
+    needPrices ? buildPrices() : null,
+  ]);
+  const out = {
+    generated_at: new Date().toISOString(), source: "live", api_version: 3,
+    sections: menu.map((m) => makeSection(m, news, priceData?.rates || [])),
+  };
+  if (priceData) out.prices = priceData.prices;
+  return out;
 }
