@@ -91,6 +91,24 @@ function markJustIn(oldSections, newSections) {
   setTimeout(() => justIn.clear(), 15000);
 }
 
+// ترجمه‌ی فارسی تیترها تو گوشی هم نگه داشته می‌شه؛ اگه یه بار سرور (مثلا به خاطر محدودیت
+// سرویس ترجمه) تیتری رو ترجمه‌نشده فرستاد، ترجمه‌ی قبلیش استفاده می‌شه.
+const hasPersian = (t) => /[\u0600-\u06FF]/.test(t);
+const FA_KEY = "titleFa";
+let faTitles = {};
+try { faTitles = JSON.parse(store.get(FA_KEY)) || {}; } catch (e) { faTitles = {}; }
+function applyTranslations(sections) {
+  for (const s of sections || []) {
+    for (const it of s.items || []) {
+      if (it.title_orig && hasPersian(it.title)) faTitles[it.title_orig] = it.title;
+      else if (!hasPersian(it.title) && faTitles[it.title]) { it.title_orig = it.title; it.title = faTitles[it.title]; }
+    }
+  }
+  const keys = Object.keys(faTitles);
+  if (keys.length > 1500) keys.slice(0, keys.length - 1000).forEach((k) => delete faTitles[k]);
+  store.set(FA_KEY, JSON.stringify(faTitles));
+}
+
 let loading = 0;
 function busy(on) {
   loading += on ? 1 : -1;
@@ -102,9 +120,10 @@ async function load({ force = false } = {}) {
   try {
     const text = await fetchData(force);
     const fresh = JSON.parse(text);
+    applyTranslations(fresh.sections);
     markJustIn(data?.sections, fresh.sections);
     data = fresh;
-    store.set(CACHE_KEY, text);
+    store.set(CACHE_KEY, JSON.stringify(fresh));
     render();
   } catch (e) {
     if (!data) {
@@ -127,6 +146,7 @@ async function refreshSection(key) {
     const sec = fresh.sections?.[0];
     if (!sec || sec.key !== key) return;
     const idx = data.sections.findIndex((s) => s.key === key);
+    applyTranslations([sec]);
     markJustIn([data.sections[idx]], [sec]);
     data.sections[idx] = sec;
     if (fresh.prices) data.prices = fresh.prices;

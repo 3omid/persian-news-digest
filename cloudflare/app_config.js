@@ -33,20 +33,20 @@ export default {
  "sources": {
   "اقتصادی": [
    {
-    "name": "BBC Persian - اقتصادی",
-    "url": "https://feeds.bbci.co.uk/persian/rss.xml"
-   },
-   {
-    "name": "BBC Business (EN)",
-    "url": "https://feeds.bbci.co.uk/news/business/rss.xml"
-   },
-   {
     "name": "دنیای اقتصاد",
     "url": "https://donya-e-eqtesad.com/rss"
    },
    {
     "name": "خبرگزاری ایسنا - اقتصادی",
     "url": "https://www.isna.ir/rss/tp/13"
+   },
+   {
+    "name": "Financial Times",
+    "url": "https://www.ft.com/world?format=rss"
+   },
+   {
+    "name": "BBC Business",
+    "url": "https://feeds.bbci.co.uk/news/business/rss.xml"
    },
    {
     "name": "CoinDesk (کریپتو)",
@@ -67,34 +67,50 @@ export default {
   ],
   "سیاسی داخلی": [
    {
-    "name": "BBC Persian",
-    "url": "https://feeds.bbci.co.uk/persian/rss.xml"
+    "name": "ایران اینترنشنال",
+    "url": "https://www.iranintl.com/fa/feed"
+   },
+   {
+    "name": "رادیو فردا",
+    "url": "https://www.radiofarda.com/api/"
+   },
+   {
+    "name": "دویچه‌وله فارسی - ایران",
+    "url": "https://rss.dw.com/xml/rss-per-iran"
+   },
+   {
+    "name": "یورونیوز فارسی",
+    "url": "https://parsi.euronews.com/rss"
    },
    {
     "name": "ایرنا (رسمی داخل ایران)",
     "url": "https://www.irna.ir/rss"
-   },
-   {
-    "name": "ایران اینترنشنال (دیدگاه خارج از کشور)",
-    "url": "https://www.iranintl.com/fa/feed"
-   },
-   {
-    "name": "صدای آمریکا فارسی - VOA (دیدگاه خارج از کشور)",
-    "url": "https://ir.voanews.com/rssfeeds"
    }
   ],
   "سیاسی خارجی": [
    {
-    "name": "BBC World (EN)",
-    "url": "https://feeds.bbci.co.uk/news/world/rss.xml"
-   },
-   {
-    "name": "Al Jazeera English",
+    "name": "الجزیره",
     "url": "https://www.aljazeera.com/xml/rss/all.xml"
    },
    {
-    "name": "ایران اینترنشنال (پوشش سیاست خارجی مرتبط با ایران)",
-    "url": "https://www.iranintl.com/fa/feed"
+    "name": "گاردین",
+    "url": "https://www.theguardian.com/world/rss"
+   },
+   {
+    "name": "نیویورک تایمز",
+    "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+   },
+   {
+    "name": "رویترز (Google News)",
+    "url": "https://news.google.com/rss/search?q=site:reuters.com+world+when:1d&hl=en-US&gl=US&ceid=US:en"
+   },
+   {
+    "name": "CBC کانادا",
+    "url": "https://www.cbc.ca/webfeed/rss/rss-world"
+   },
+   {
+    "name": "دویچه‌وله فارسی",
+    "url": "https://rss.dw.com/rdf/rss-per-all"
    }
   ],
   "ورزشی": [
@@ -103,30 +119,50 @@ export default {
     "url": "https://news.google.com/rss/search?q=Persepolis+OR+Esteghlal+OR+%22Team+Melli%22+OR+Sepahan+OR+Tractor+FC+when:3d&hl=en-US&gl=US&ceid=US:en"
    },
    {
-    "name": "BBC Sport (EN)",
+    "name": "ESPN فوتبال",
+    "url": "https://www.espn.com/espn/rss/soccer/news"
+   },
+   {
+    "name": "اسکای اسپورت",
+    "url": "https://www.skysports.com/rss/12040"
+   },
+   {
+    "name": "گاردین فوتبال",
+    "url": "https://www.theguardian.com/football/rss"
+   },
+   {
+    "name": "BBC Sport",
     "url": "https://feeds.bbci.co.uk/sport/rss.xml"
    }
   ],
   "جنگ ایران": [
    {
-    "name": "BBC Persian",
-    "url": "https://feeds.bbci.co.uk/persian/rss.xml"
-   },
-   {
-    "name": "Al Jazeera - Middle East",
-    "url": "https://www.aljazeera.com/xml/rss/all.xml"
-   },
-   {
-    "name": "Reuters World (via Google News)",
-    "url": "https://news.google.com/rss/search?q=Iran+war&hl=en-US&gl=US&ceid=US:en"
-   },
-   {
-    "name": "ایران اینترنشنال (دیدگاه خارج از کشور)",
+    "name": "ایران اینترنشنال",
     "url": "https://www.iranintl.com/fa/feed"
    },
    {
-    "name": "صدای آمریکا فارسی (دیدگاه دولت آمریکا)",
-    "url": "https://ir.voanews.com/rssfeeds"
+    "name": "رادیو فردا",
+    "url": "https://www.radiofarda.com/api/"
+   },
+   {
+    "name": "رویترز - ایران (Google News)",
+    "url": "https://news.google.com/rss/search?q=Iran+war+OR+Israel+Iran+when:1d&hl=en-US&gl=US&ceid=US:en"
+   },
+   {
+    "name": "الجزیره",
+    "url": "https://www.aljazeera.com/xml/rss/all.xml"
+   },
+   {
+    "name": "فرانس ۲۴ - خاورمیانه",
+    "url": "https://www.france24.com/en/middle-east/rss"
+   },
+   {
+    "name": "المانیتور",
+    "url": "https://www.al-monitor.com/rss"
+   },
+   {
+    "name": "یورونیوز فارسی",
+    "url": "https://parsi.euronews.com/rss"
    }
   ],
   "مهاجرت کانادا": [

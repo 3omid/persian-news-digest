@@ -44,52 +44,63 @@ def _telegram_source(channel, tag):
 # ۱) منابع RSS به تفکیک دسته
 # ---------------------------------------------------------------
 RSS_SOURCES = {
+    # نکته‌ها (اکتبر ۲۰۲۶، به درخواست کاربر):
+    # - BBC از بخش‌های سیاسی و جنگ حذف شد؛ منابع متنوع‌تر (فارسی خارج از کشور + بین‌المللی).
+    # - تیترهای انگلیسی تو اپ خودکار به فارسی ترجمه می‌شن (cloudflare/news.js، build_app_data.py).
+    # - سایت‌های داخل ایران (مهر، تسنیم، فارس، ایسنا، خبرآنلاین، ورزش۳ ...) به سرورهای خارج از ایران
+    #   جواب نمی‌دن؛ ایرنا و دنیای اقتصاد مونده‌ن چون گاهی جواب می‌دن (اگه ندن، اپ منتظرشون نمی‌مونه).
+    # - هر بخش از هر منبع حداکثر چند خبر نشون می‌ده تا یک منبع کل لیست رو پر نکنه.
     "اقتصادی": [
-        {"name": "BBC Persian - اقتصادی", "url": "https://feeds.bbci.co.uk/persian/rss.xml", "tag": "اقتصاد"},
-        {"name": "BBC Business (EN)", "url": "https://feeds.bbci.co.uk/news/business/rss.xml", "tag": "economy"},
         {"name": "دنیای اقتصاد", "url": "https://donya-e-eqtesad.com/rss", "tag": "اقتصاد"},
         {"name": "خبرگزاری ایسنا - اقتصادی", "url": "https://www.isna.ir/rss/tp/13", "tag": "اقتصاد"},
+        {"name": "Financial Times", "url": "https://www.ft.com/world?format=rss", "tag": "economy"},
+        {"name": "BBC Business", "url": "https://feeds.bbci.co.uk/news/business/rss.xml", "tag": "economy"},
         {"name": "CoinDesk (کریپتو)", "url": "https://www.coindesk.com/arc/outboundfeeds/rss/", "tag": "crypto"},
         {"name": "Cointelegraph (کریپتو)", "url": "https://cointelegraph.com/rss", "tag": "crypto"},
         {"name": "ForexLive (فارکس)", "url": "https://www.forexlive.com/feed/news", "tag": "forex"},
         {"name": "Investing.com - فارکس", "url": "https://www.investing.com/rss/news_1.rss", "tag": "forex - TO VERIFY"},
     ],
     "سیاسی داخلی": [
-        {"name": "BBC Persian", "url": "https://feeds.bbci.co.uk/persian/rss.xml", "tag": "سیاست ایران - دیدگاه بی‌طرف"},
+        {"name": "ایران اینترنشنال", "url": "https://www.iranintl.com/fa/feed", "tag": "سیاست ایران - دیدگاه خارج از کشور"},
+        {"name": "رادیو فردا", "url": "https://www.radiofarda.com/api/", "tag": "سیاست ایران - دیدگاه خارج از کشور"},
+        {"name": "دویچه‌وله فارسی - ایران", "url": "https://rss.dw.com/xml/rss-per-iran", "tag": "سیاست ایران - رسانه‌ی آلمانی"},
+        {"name": "یورونیوز فارسی", "url": "https://parsi.euronews.com/rss", "tag": "سیاست ایران - رسانه‌ی اروپایی"},
         {"name": "ایرنا (رسمی داخل ایران)", "url": "https://www.irna.ir/rss", "tag": "سیاست ایران - دیدگاه رسمی داخل ایران"},
-        {"name": "ایران اینترنشنال (دیدگاه خارج از کشور)", "url": "https://www.iranintl.com/fa/feed",
-         "tag": "سیاست ایران - دیدگاه منتقد/خارج از کشور - TO VERIFY"},
-        {"name": "صدای آمریکا فارسی - VOA (دیدگاه خارج از کشور)", "url": "https://ir.voanews.com/rssfeeds",
-         "tag": "سیاست ایران - دیدگاه دولت آمریکا/خارج از کشور - TO VERIFY (این صفحه لیست فیدهاست، آدرس دقیق XML رو از داخلش کپی کن)"},
         _telegram_source(TELEGRAM_CHANNELS[0], "کانال تلگرام - سیاسی داخلی"),
         _telegram_source(TELEGRAM_CHANNELS[4], "کانال تلگرام - سیاسی داخلی"),
         _telegram_source(TELEGRAM_CHANNELS[7], "کانال تلگرام - سیاسی داخلی"),
     ],
     "سیاسی خارجی": [
-        {"name": "BBC World (EN)", "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "tag": "world"},
-        {"name": "Al Jazeera English", "url": "https://www.aljazeera.com/xml/rss/all.xml", "tag": "world"},
-        {"name": "ایران اینترنشنال (پوشش سیاست خارجی مرتبط با ایران)", "url": "https://www.iranintl.com/fa/feed",
-         "tag": "foreign policy re: Iran - TO VERIFY"},
+        {"name": "الجزیره", "url": "https://www.aljazeera.com/xml/rss/all.xml", "tag": "world"},
+        {"name": "گاردین", "url": "https://www.theguardian.com/world/rss", "tag": "world"},
+        {"name": "نیویورک تایمز", "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "tag": "world"},
+        {"name": "رویترز (Google News)",
+         "url": "https://news.google.com/rss/search?q=site:reuters.com+world+when:1d&hl=en-US&gl=US&ceid=US:en", "tag": "world"},
+        {"name": "CBC کانادا", "url": "https://www.cbc.ca/webfeed/rss/rss-world", "tag": "world"},
+        {"name": "دویچه‌وله فارسی", "url": "https://rss.dw.com/rdf/rss-per-all", "tag": "world - فارسی"},
         _telegram_source(TELEGRAM_CHANNELS[6], "کانال تلگرام - سیاسی خارجی"),
     ],
     "ورزشی": [
         # فید ورزشی BBC فارسی (persian/sport/rss.xml) دیگه وجود نداره و به فید اصلی BBC فارسی
-        # ریدایرکت می‌شه - برای همین خبر سیاسی تو بخش ورزشی میومد. جایگزینش: فوتبال ایران از
-        # Google News (جستجوی فارسی Google News از سرورهای خارج خبر ورزشی درستی نمی‌داد).
+        # ریدایرکت می‌شه. سایت‌های ورزشی داخل ایران (ورزش۳ ...) از خارج جواب نمی‌دن؛ فوتبال ایران
+        # از Google News میاد.
         {"name": "فوتبال ایران (Google News)",
          "url": "https://news.google.com/rss/search?q=Persepolis+OR+Esteghlal+OR+%22Team+Melli%22+OR+Sepahan+OR+Tractor+FC+when:3d&hl=en-US&gl=US&ceid=US:en",
          "tag": "ورزش ایران"},
-        {"name": "BBC Sport (EN)", "url": "https://feeds.bbci.co.uk/sport/rss.xml", "tag": "sport"},
+        {"name": "ESPN فوتبال", "url": "https://www.espn.com/espn/rss/soccer/news", "tag": "sport"},
+        {"name": "اسکای اسپورت", "url": "https://www.skysports.com/rss/12040", "tag": "sport"},
+        {"name": "گاردین فوتبال", "url": "https://www.theguardian.com/football/rss", "tag": "sport"},
+        {"name": "BBC Sport", "url": "https://feeds.bbci.co.uk/sport/rss.xml", "tag": "sport"},
     ],
     "جنگ ایران": [
-        {"name": "BBC Persian", "url": "https://feeds.bbci.co.uk/persian/rss.xml", "tag": "جنگ"},
-        {"name": "Al Jazeera - Middle East", "url": "https://www.aljazeera.com/xml/rss/all.xml", "tag": "middle east"},
-        {"name": "Reuters World (via Google News)",
-         "url": "https://news.google.com/rss/search?q=Iran+war&hl=en-US&gl=US&ceid=US:en", "tag": "iran war"},
-        {"name": "ایران اینترنشنال (دیدگاه خارج از کشور)", "url": "https://www.iranintl.com/fa/feed",
-         "tag": "جنگ - دیدگاه خارج از کشور - TO VERIFY"},
-        {"name": "صدای آمریکا فارسی (دیدگاه دولت آمریکا)", "url": "https://ir.voanews.com/rssfeeds",
-         "tag": "جنگ - دیدگاه آمریکا - TO VERIFY"},
+        {"name": "ایران اینترنشنال", "url": "https://www.iranintl.com/fa/feed", "tag": "جنگ - دیدگاه خارج از کشور"},
+        {"name": "رادیو فردا", "url": "https://www.radiofarda.com/api/", "tag": "جنگ - دیدگاه خارج از کشور"},
+        {"name": "رویترز - ایران (Google News)",
+         "url": "https://news.google.com/rss/search?q=Iran+war+OR+Israel+Iran+when:1d&hl=en-US&gl=US&ceid=US:en", "tag": "iran war"},
+        {"name": "الجزیره", "url": "https://www.aljazeera.com/xml/rss/all.xml", "tag": "middle east"},
+        {"name": "فرانس ۲۴ - خاورمیانه", "url": "https://www.france24.com/en/middle-east/rss", "tag": "middle east"},
+        {"name": "المانیتور", "url": "https://www.al-monitor.com/rss", "tag": "middle east"},
+        {"name": "یورونیوز فارسی", "url": "https://parsi.euronews.com/rss", "tag": "جنگ - رسانه‌ی اروپایی"},
         _telegram_source(TELEGRAM_CHANNELS[1], "کانال تلگرام - جنگ"),
         _telegram_source(TELEGRAM_CHANNELS[2], "کانال تلگرام - جنگ"),
         _telegram_source(TELEGRAM_CHANNELS[3], "کانال تلگرام - جنگ"),

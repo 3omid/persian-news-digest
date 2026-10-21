@@ -7,6 +7,8 @@ import CONFIG from "./app_config.js";
 
 const ITEMS_PER_CATEGORY = 12;
 const ITEMS_PER_SOURCE = 6;
+// تو هر بخش از هر منبع حداکثر این‌قدر خبر، تا یک منبع کل لیست رو پر نکنه
+const MAX_PER_SOURCE_IN_SECTION = 3;
 const SPARK_DAYS = 30;
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; NewsDigest/1.0)" };
 
@@ -67,6 +69,9 @@ export function parseFeed(xml) {
   return items;
 }
 
+// سایت‌های آمار/شرط‌بندی که Google News قاطی خبرها میاره و خبر نیستن
+const NOT_NEWS = /odds|sofascore|transfermarkt|flashscore|forza football|fotmob|besoccer|livescore|\bTOD\b/i;
+
 // تیترهای Google News آخرشون « - اسم سایت» دارن؛ اسم سایت میره تو منبع
 function cleanGoogleNews(it) {
   if (it.link.includes("news.google.com")) {
@@ -111,10 +116,15 @@ async function fetchAllNews(categories, waitUntil) {
     const seen = new Set();
     const items = [];
     for (const src of list) {
-      for (const it of fetched.get(src.url) || []) {
-        if (seen.has(it.title)) continue;
+      // از هر منبع فقط چند خبر آخرش (فیدها خودشون از جدید به قدیم مرتب‌ان)
+      const own = (fetched.get(src.url) || [])
+        .filter((it) => !seen.has(it.title))
+        .sort((a, b) => (b.published || "").localeCompare(a.published || ""))
+        .slice(0, MAX_PER_SOURCE_IN_SECTION);
+      for (const it of own) {
         seen.add(it.title);
-        items.push(cleanGoogleNews({ ...it, source: src.name.replace("تلگرام: ", "") }));
+        const clean = cleanGoogleNews({ ...it, source: src.name.replace("تلگرام: ", "") });
+        if (!NOT_NEWS.test(clean.source) && !/live score|best odds|h2h/i.test(clean.title)) items.push(clean);
       }
     }
     // خبرهای بدون تاریخ میرن ته لیست
@@ -243,12 +253,50 @@ async function buildPrices() {
 // ---------- کل داده ----------
 export const SECTION_KEYS = CONFIG.menu.map((m) => m.key);
 
-// دسته‌های خبری‌ای که یک دکمه لازم داره
+// دسته‌های خبری‌ای که یک دکمه لازم داره. «همه اخبار» فقط دسته‌هایی که خودشون دکمه دارن
+// (مهاجرت کانادا و بازی و گجت فقط تو گزارش ساعتی‌ان) - تا تعداد درخواست‌ها زیر سقف رایگان
+// Cloudflare (۵۰ درخواست بیرونی برای هر جواب) بمونه.
 function categoriesFor(key) {
   if (key === "gold_currency") return [];
-  if (key === "all") return Object.keys(CONFIG.sources);
+  if (key === "all") return [...new Set(SECTION_KEYS.filter((k) => k !== "all").flatMap(categoriesFor))];
   if (key === "سیاسی") return ["سیاسی داخلی", "سیاسی خارجی"];
-  return [key];
+  return CONFIG.sources[key] ? [key] : [];
+}
+
+// ---------- ترجمه‌ی تیترهای غیرفارسی به فارسی (Google Translate رایگان) ----------
+const hasPersian = (t) => /[\u0600-\u06FF]/.test(t);
+const translated = new Map(); // تیتر → ترجمه (تو حافظه‌ی سرور، تا یک تیتر دوباره ترجمه نشه)
+
+async function translateBatch(titles) {
+  const body = new URLSearchParams({ q: titles.join("\n") });
+  const resp = await fetch("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=fa&dt=t", {
+    method: "POST", body, headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded" }, signal: AbortSignal.timeout(5000),
+  });
+  if (!resp.ok) throw new Error(`translate ${resp.status}`);
+  const lines = (await resp.json())[0].map((seg) => seg[0]).join("").split("\n");
+  if (lines.length !== titles.length) throw new Error("translate: line count mismatch");
+  titles.forEach((t, i) => { if (lines[i].trim()) translated.set(t, lines[i].trim()); });
+}
+
+async function translateTitles(sections) {
+  const todo = [...new Set(sections.flatMap((s) => (s.items || []).map((it) => it.title)))]
+    .filter((t) => !hasPersian(t) && !translated.has(t));
+  // دسته‌های حداکثر ~۳۵۰۰ حرفی، هم‌زمان
+  const batches = [];
+  let cur = [], len = 0;
+  for (const t of todo) {
+    if (len + t.length > 3500 && cur.length) { batches.push(cur); cur = []; len = 0; }
+    cur.push(t.replace(/\n/g, " ")); len += t.length + 1;
+  }
+  if (cur.length) batches.push(cur);
+  await Promise.all(batches.slice(0, 4).map((b) => translateBatch(b).catch(() => {})));
+  if (translated.size > 3000) translated.clear();
+  for (const s of sections) {
+    for (const it of s.items || []) {
+      const fa = translated.get(it.title);
+      if (fa) { it.title_orig = it.title; it.title = fa; }
+    }
+  }
 }
 
 function makeSection({ label, key }, news, rates) {
@@ -265,16 +313,15 @@ function makeSection({ label, key }, news, rates) {
 // section: کلید یک دکمه → فقط داده‌ی همون بخش (سریع‌تر)؛ خالی → همه‌چیز
 export async function buildData(section, waitUntil) {
   const menu = section ? CONFIG.menu.filter((m) => m.key === section) : CONFIG.menu;
-  const cats = section ? categoriesFor(section) : null;
+  const cats = section ? categoriesFor(section) : categoriesFor("all");
   const needPrices = !section || section === "gold_currency";
   const [news, priceData] = await Promise.all([
-    cats && !cats.length ? {} : fetchAllNews(cats, waitUntil),
+    cats.length ? fetchAllNews(cats, waitUntil) : {},
     needPrices ? buildPrices() : null,
   ]);
-  const out = {
-    generated_at: new Date().toISOString(), source: "live", api_version: 3,
-    sections: menu.map((m) => makeSection(m, news, priceData?.rates || [])),
-  };
+  const sections = menu.map((m) => makeSection(m, news, priceData?.rates || []));
+  await translateTitles(sections);
+  const out = { generated_at: new Date().toISOString(), source: "live", api_version: 4, sections };
   if (priceData) out.prices = priceData.prices;
   return out;
 }

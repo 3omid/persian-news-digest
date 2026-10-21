@@ -17,6 +17,7 @@ CORS اجازه نمی‌ده)، برای همین این اسکریپت تو Gi
 
 import json
 import logging
+import re
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -33,6 +34,9 @@ log = logging.getLogger(__name__)
 
 ITEMS_PER_CATEGORY = 12
 ITEMS_PER_SOURCE = 6
+# تو هر بخش از هر منبع حداکثر این‌قدر خبر، تا یک منبع کل لیست رو پر نکنه (مثل cloudflare/news.js)
+MAX_PER_SOURCE_IN_SECTION = 3
+NOT_NEWS = re.compile(r"odds|sofascore|transfermarkt|flashscore|forza football|fotmob|besoccer|livescore|\bTOD\b", re.I)
 DEFAULT_OUTPUT = os.path.join("app", "data.json")
 
 
@@ -87,11 +91,14 @@ def _fetch_all_categories():
         seen_titles = set()
         items = []
         for src in sources:
-            for it in fetched.get(src["url"], []):
-                if it["title"] in seen_titles:
-                    continue
+            own = [it for it in fetched.get(src["url"], []) if it["title"] not in seen_titles]
+            own.sort(key=lambda x: x["published"] or "", reverse=True)
+            for it in own[:MAX_PER_SOURCE_IN_SECTION]:
                 seen_titles.add(it["title"])
-                items.append(_clean_google_news(dict(it, source=src["name"].replace("تلگرام: ", ""))))
+                clean = _clean_google_news(dict(it, source=src["name"].replace("تلگرام: ", "")))
+                if NOT_NEWS.search(clean["source"]) or re.search(r"live score|best odds|h2h", clean["title"], re.I):
+                    continue
+                items.append(clean)
         # خبرهای بدون تاریخ میرن ته لیست
         items.sort(key=lambda x: x["published"] or "", reverse=True)
         result[category] = items[:ITEMS_PER_CATEGORY]
@@ -210,6 +217,36 @@ def _unique(groups, per_group=None):
     return out
 
 
+def _translate_titles(sections):
+    """تیترهای غیرفارسی رو با Google Translate (رایگان) به فارسی ترجمه می‌کنه (مثل cloudflare/news.js)."""
+    persian = re.compile(r"[\u0600-\u06FF]")
+    todo = list(dict.fromkeys(
+        it["title"] for s in sections for it in s.get("items", []) if not persian.search(it["title"])))
+    done = {}
+    batch, size = [], 0
+    for t in todo + [None]:
+        if t is not None and size + len(t) <= 3500:
+            batch.append(t.replace("\n", " "))
+            size += len(t) + 1
+            continue
+        if batch:
+            try:
+                resp = requests.post(
+                    "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=fa&dt=t",
+                    data={"q": "\n".join(batch)}, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+                lines = "".join(seg[0] for seg in resp.json()[0]).split("\n")
+                if len(lines) == len(batch):
+                    done.update({orig: fa.strip() for orig, fa in zip(batch, lines) if fa.strip()})
+            except Exception as e:
+                log.warning(f"ترجمه انجام نشد: {e}")
+        batch, size = ([t.replace("\n", " ")], len(t) + 1) if t is not None else ([], 0)
+    for s in sections:
+        for it in s.get("items", []):
+            if it["title"] in done:
+                it["title_orig"], it["title"] = it["title"], done[it["title"]]
+
+
 def build(output_path=DEFAULT_OUTPUT):
     news = _fetch_all_categories()
     sections = []
@@ -235,6 +272,7 @@ def build(output_path=DEFAULT_OUTPUT):
             section["items"] = news.get(key, [])
         sections.append(section)
 
+    _translate_titles(sections)
     now = datetime.now(timezone.utc)
     data = {
         "generated_at": now.isoformat(),
