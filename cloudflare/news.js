@@ -216,17 +216,12 @@ async function buildPrices() {
   }
   const g18 = live("geram18").price;
   if (g18) rates.push({ label: "طلای دست دوم (تقریبی)", value: Math.round(g18 * 0.99), unit: "تومان" });
-  // برای عیب‌یابی: زمان فید لحظه‌ای و آخرین روز تاریخچه (اپ ازشون استفاده نمی‌کنه)
-  const debug = {
-    ticker_ts: ticker.price_dollar_rl?.ts || null, ticker_dp: ticker.price_dollar_rl?.dp ?? null,
-    ticker_p: ticker.price_dollar_rl?.p || null, usd_hist_last: usdHist.slice(-2), cad_last: cadHist.slice(-1),
-  };
-  return { prices, rates, debug };
+  return { prices, rates };
 }
 
 // ---------- کل داده ----------
 export async function buildData() {
-  const [news, { prices, rates, debug }] = await Promise.all([fetchAllNews(), buildPrices()]);
+  const [news, { prices, rates }] = await Promise.all([fetchAllNews(), buildPrices()]);
   const sections = CONFIG.menu.map(({ label, key }) => {
     if (key === "gold_currency") return { key, label, type: "rates", rates };
     if (key === "all") {
@@ -237,5 +232,5 @@ export async function buildData() {
     }
     return { key, label, type: "news", items: news[key] || [] };
   });
-  return { generated_at: new Date().toISOString(), source: "live", api_version: 2, prices, sections, debug };
+  return { generated_at: new Date().toISOString(), source: "live", api_version: 2, prices, sections };
 }
