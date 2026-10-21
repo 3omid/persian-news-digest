@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 seen_news.db
 output/
+app/data.json

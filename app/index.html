@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>خلاصه اخبار</title>
+  <meta name="description" content="آخرین اخبار اقتصادی، سیاسی، ورزشی، فناوری و قیمت طلا و ارز">
+  <meta name="theme-color" content="#1f3864">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="خلاصه اخبار">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="topbar">
+    <button id="back" class="icon-btn" aria-label="بازگشت" hidden>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="titles">
+      <h1 id="title">خلاصه اخبار</h1>
+      <p id="updated" class="updated">در حال بارگذاری…</p>
+    </div>
+    <button id="refresh" class="icon-btn" aria-label="به‌روزرسانی">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <section id="menu" class="menu" aria-label="دسته‌ها"></section>
+    <section id="section" class="section" hidden></section>
+
+    <div id="install" class="install" hidden>
+      <p id="install-text"></p>
+      <button id="install-btn" class="install-btn" hidden>نصب اپ</button>
+      <button id="install-close" class="link-btn">بستن</button>
+    </div>
+
+    <a class="report-link" href="report.html">📄 گزارش کامل ساعتی (با تحلیل و نمودار)</a>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
