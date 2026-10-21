@@ -200,8 +200,9 @@ async function buildPrices() {
       : preferLive(live(p.slug).price, lastOf(hist[p.key]));
     if (!now) continue;
     const past = hist[p.key].filter(([d]) => d < today).map(([, v]) => v).slice(-SPARK_DAYS);
+    // بعد از نیمه‌شب تهران، tgju تغییر روز جدید رو صفر می‌کنه؛ اون موقع با بسته‌ی روز قبل مقایسه می‌شه
     let change = p.slug ? live(p.slug).change : null;
-    if (change === null) change = pct(now, past[past.length - 1]);
+    if (!change) change = pct(now, past[past.length - 1]);
     prices.push({ key: p.key, label: p.label, value: Math.round(now), unit: "تومان", change, spark: [...past.map(Math.round), Math.round(now)] });
   }
 

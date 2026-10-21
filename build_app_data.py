@@ -185,7 +185,7 @@ def _dashboard_prices():
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         past = [v for d, v in hist if d < today][-SPARK_DAYS:]
         change = fetch_rates._live_price_and_change(slug)[1] if slug else None
-        if change is None or abs(change) > 30:
+        if not change or abs(change) > 30:
             change = _pct(now, past[-1] if past else None)
         out.append({
             "key": key, "label": label, "value": round(now), "unit": "تومان",
