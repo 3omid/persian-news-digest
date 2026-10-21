@@ -237,5 +237,5 @@ export async function buildData() {
     }
     return { key, label, type: "news", items: news[key] || [] };
   });
-  return { generated_at: new Date().toISOString(), source: "live", prices, sections, debug };
+  return { generated_at: new Date().toISOString(), source: "live", api_version: 2, prices, sections, debug };
 }
