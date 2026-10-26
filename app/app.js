@@ -48,7 +48,8 @@ function timeAgo(iso) {
   return `${faNum.format(Math.round(hours / 24))} روز پیش`;
 }
 
-const isLatin = (s) => /^[\s\W\d]*[A-Za-z]/.test(s);
+// فقط تیترِ کاملا غیرفارسی چپ‌چین می‌شه؛ تیتر فارسی‌ای که با یک کلمه‌ی انگلیسی شروع می‌شه راست‌چین می‌مونه
+const isLatin = (s) => !/[\u0600-\u06FF]/.test(s) && /^[\s\W\d]*[A-Za-z]/.test(s);
 const isNew = (it) => it.published && Date.now() - new Date(it.published).getTime() < NEW_MINUTES * 60000;
 
 // رنگ هر دکمه از تم: ۷ رنگ کاشی‌های اپ شیفت، و «همه اخبار» رنگ کارت «شیفت من».
@@ -102,6 +103,43 @@ function applyTranslations(sections) {
   const keys = Object.keys(faTitles);
   if (keys.length > 1500) keys.slice(0, keys.length - 1000).forEach((k) => delete faTitles[k]);
   store.set(FA_KEY, JSON.stringify(faTitles));
+}
+
+// تیترهایی که سرور ترجمه‌نشده فرستاده (Google گاهی سرورهای Cloudflare رو محدود می‌کنه) رو خودِ
+// گوشی ترجمه می‌کنه - همون سرویس افزونه‌ی ترجمه‌ی Chrome، چند تیتر با یک درخواست.
+let translating = null;
+async function translateMissing() {
+  if (translating || !data) return translating;
+  const todo = [...new Set(data.sections.flatMap((s) => (s.items || []).map((it) => it.title)))]
+    .filter((t) => !hasPersian(t) && !faTitles[t]);
+  if (!todo.length) return;
+  const batches = [];
+  let cur = [], len = 0;
+  for (const t of todo) {
+    if (len + t.length > 1500 && cur.length) { batches.push(cur); cur = []; len = 0; }
+    cur.push(t); len += t.length + 1;
+  }
+  if (cur.length) batches.push(cur);
+  translating = Promise.all(batches.map(async (batch) => {
+    try {
+      const qs = batch.map((t) => `q=${encodeURIComponent(t)}`).join("&");
+      let out = JSON.parse(await fetchText(`https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=fa&${qs}`, {}, 10000));
+      if (batch.length === 1 && typeof out[0] === "string") out = [out];
+      if (!Array.isArray(out) || out.length !== batch.length) return;
+      batch.forEach((t, i) => {
+        const fa = Array.isArray(out[i]) ? out[i][0] : out[i];
+        if (typeof fa === "string" && fa.trim()) {
+          faTitles[t] = fa.trim();
+          if (justIn.has(t)) justIn.add(fa.trim());
+        }
+      });
+    } catch (e) { /* دفعه‌ی بعد */ }
+  })).then(() => {
+    applyTranslations(data.sections);
+    store.set(CACHE_KEY, JSON.stringify(data));
+    render();
+  }).finally(() => { translating = null; });
+  return translating;
 }
 
 let loading = 0;
@@ -166,6 +204,7 @@ async function load({ force = false } = {}) {
     // سرور زنده در دسترس نبود: نسخه‌ی پشتیبان گیت‌هاب، اگه تازه‌تره
     if (!live) await loadBackup(force).catch(() => false);
     render();
+    translateMissing();
     if (!live && Date.now() - new Date(data.generated_at).getTime() > 60 * 60000) {
       updatedEl.textContent = `آفلاین · آخرین به‌روزرسانی: ${timeAgo(data.generated_at)}`;
     }
@@ -186,6 +225,7 @@ async function refreshSection(key) {
   try {
     await fetchSection(key);
     if (decodeURIComponent(location.hash.slice(1)) === key) render();
+    translateMissing();
   } catch (e) {
     /* بدون اینترنت یا سرور: همون خبرهای ذخیره‌شده می‌مونه */
   } finally {
