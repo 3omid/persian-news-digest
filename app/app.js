@@ -72,14 +72,9 @@ async function fetchText(url, opts = {}, timeoutMs = 8000) {
   }
 }
 
-async function fetchData(force) {
-  try {
-    // بار اول بعد از خالی شدن کش، سرور چند ثانیه منبع‌ها رو می‌گیره؛ بعدش فوریه
-    const text = await fetchText(LIVE_API, {}, 12000);
-    if (JSON.parse(text).sections) return text;
-  } catch (e) { /* میریم سراغ data.json */ }
-  return fetchText("data.json", { cache: force ? "reload" : "no-cache" });
-}
+// نسخه‌ی پشتیبان: data.json که GitHub Actions می‌سازه (روی GitHub Pages؛ آدرس کامل، تا از نسخه‌ی
+// Cloudflare هم پیدا بشه - اون‌جا data.json نیست)
+const GITHUB_DATA = "https://3omid.github.io/persian-news-digest/data.json";
 
 // تیتر خبرهایی که همین الان رسیدن (تو داده‌ی قبلی نبودن) - چند ثانیه رنگی نشون داده می‌شن
 const justIn = new Set();
@@ -115,22 +110,69 @@ function busy(on) {
   refreshBtn.classList.toggle("spinning", loading > 0);
 }
 
+// «همه اخبار» رو خودِ اپ می‌سازه: آخرین خبر هر بخش (بدون تکرار)
+function rebuildAll() {
+  const all = data?.sections.find((s) => s.key === "all");
+  if (!all) return;
+  const seen = new Set(), items = [];
+  for (const s of data.sections) {
+    if (s.key === "all" || s.type !== "news") continue;
+    const it = s.items.find((x) => !seen.has(x.title));
+    if (!it) continue;
+    seen.add(it.title);
+    items.push({ ...it, category: it.category || splitLabel(s.label)[1] });
+  }
+  all.items = items;
+}
+
+// یک بخش زنده از سرور Cloudflare → داده‌ی اپ (بدون رسم دوباره). true اگه موفق بود.
+async function fetchSection(key) {
+  const fresh = JSON.parse(await fetchText(`${LIVE_API}?section=${encodeURIComponent(key)}`, {}, 12000));
+  const sec = fresh.sections?.[0];
+  if (!sec || sec.key !== key) throw new Error("bad section");
+  const idx = data.sections.findIndex((s) => s.key === key);
+  applyTranslations([sec]);
+  markJustIn([data.sections[idx]], [sec]);
+  if (idx >= 0) data.sections[idx] = sec;
+  if (fresh.prices) data.prices = fresh.prices;
+  data.generated_at = fresh.generated_at;
+  rebuildAll();
+  store.set(CACHE_KEY, JSON.stringify(data));
+  return true;
+}
+
+// data.json گیت‌هاب؛ فقط اگه از داده‌ی فعلی تازه‌تر باشه جایگزین می‌شه
+async function loadBackup(force) {
+  const fresh = JSON.parse(await fetchText(GITHUB_DATA, { cache: force ? "reload" : "no-cache" }, 10000));
+  if (!fresh.sections) throw new Error("bad backup");
+  if (data && new Date(fresh.generated_at) <= new Date(data.generated_at)) return false;
+  applyTranslations(fresh.sections);
+  markJustIn(data?.sections, fresh.sections);
+  data = fresh;
+  store.set(CACHE_KEY, JSON.stringify(data));
+  return true;
+}
+
+// باز شدن اپ / دکمه‌ی 🔄 / هر ۲ دقیقه: همه‌ی بخش‌ها زنده و هم‌زمان (هر بخش جدا، چون Cloudflare
+// رایگان تو هر درخواست حداکثر ۵۰ درخواست بیرونی اجازه می‌ده)؛ هر بخش به‌محض رسیدن نشون داده می‌شه.
 async function load({ force = false } = {}) {
   busy(true);
   try {
-    const text = await fetchData(force);
-    const fresh = JSON.parse(text);
-    applyTranslations(fresh.sections);
-    markJustIn(data?.sections, fresh.sections);
-    data = fresh;
-    store.set(CACHE_KEY, JSON.stringify(fresh));
+    if (!data) await loadBackup(force).then(render).catch(() => {});
+    if (!data) throw new Error("no data");
+    const keys = data.sections.map((s) => s.key).filter((k) => k !== "all");
+    const results = await Promise.allSettled(keys.map((k) => fetchSection(k).then(render)));
+    const live = results.filter((r) => r.status === "fulfilled").length;
+    // سرور زنده در دسترس نبود: نسخه‌ی پشتیبان گیت‌هاب، اگه تازه‌تره
+    if (!live) await loadBackup(force).catch(() => false);
     render();
+    if (!live && Date.now() - new Date(data.generated_at).getTime() > 60 * 60000) {
+      updatedEl.textContent = `آفلاین · آخرین به‌روزرسانی: ${timeAgo(data.generated_at)}`;
+    }
   } catch (e) {
     if (!data) {
       updatedEl.textContent = "اتصال برقرار نشد";
       menuEl.innerHTML = `<div class="error">الان نتونستم اخبار رو بگیرم. اینترنت رو چک کن و دکمه‌ی 🔄 رو بزن.</div>`;
-    } else {
-      updatedEl.textContent = `آفلاین · آخرین به‌روزرسانی: ${timeAgo(data.generated_at)}`;
     }
   } finally {
     busy(false);
@@ -139,19 +181,10 @@ async function load({ force = false } = {}) {
 
 // وقتی یک دکمه زده می‌شه: اول خبرهای ذخیره‌شده فوری، بعد همون بخش زنده از سرور
 async function refreshSection(key) {
-  if (!data || !key || key === "weather" || !data.sections.some((s) => s.key === key)) return;
+  if (!data || !key || key === "weather" || key === "all" || !data.sections.some((s) => s.key === key)) return;
   busy(true);
   try {
-    const fresh = JSON.parse(await fetchText(`${LIVE_API}?section=${encodeURIComponent(key)}`, {}, 10000));
-    const sec = fresh.sections?.[0];
-    if (!sec || sec.key !== key) return;
-    const idx = data.sections.findIndex((s) => s.key === key);
-    applyTranslations([sec]);
-    markJustIn([data.sections[idx]], [sec]);
-    data.sections[idx] = sec;
-    if (fresh.prices) data.prices = fresh.prices;
-    data.generated_at = fresh.generated_at;
-    store.set(CACHE_KEY, JSON.stringify(data));
+    await fetchSection(key);
     if (decodeURIComponent(location.hash.slice(1)) === key) render();
   } catch (e) {
     /* بدون اینترنت یا سرور: همون خبرهای ذخیره‌شده می‌مونه */
@@ -277,7 +310,7 @@ window.addEventListener("hashchange", () => {
 setInterval(() => {
   if (document.visibilityState !== "visible") return;
   const key = decodeURIComponent(location.hash.slice(1));
-  if (key && key !== "weather") refreshSection(key);
+  if (key && key !== "weather" && key !== "all") refreshSection(key);
   else load();
 }, 2 * 60 * 1000);
 document.addEventListener("visibilitychange", () => {

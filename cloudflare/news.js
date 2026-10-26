@@ -14,6 +14,7 @@ const UA = { "User-Agent": "Mozilla/5.0 (compatible; NewsDigest/1.0)" };
 
 const TGJU_TICKER = ["https://call4.tgju.org/ajax.json", "https://call3.tgju.org/ajax.json", "https://call2.tgju.org/ajax.json"];
 const TGJU_HISTORY = (slug) => `https://api.tgju.org/v1/market/indicator/summary-table-data/${slug}?length=${SPARK_DAYS + 10}&start=0`;
+const GITHUB_DATA = "https://3omid.github.io/persian-news-digest/data.json";
 const BOC_USDCAD = `https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json?recent=${SPARK_DAYS + 15}`;
 
 // قیمت‌های صفحه اصلی (مثل DASHBOARD_PRICES در build_app_data.py)
@@ -151,20 +152,23 @@ function unique(groups, perGroup = 0) {
 // ---------- قیمت‌ها (tgju + بانک مرکزی کانادا) ----------
 const num = (s) => Number(String(s).replace(/,/g, "").trim());
 
+// سرورهای tgju هم‌زمان امتحان می‌شن (نه یکی‌یکی) و هر کدوم زودتر جواب داد
 async function tgjuTicker() {
-  for (const url of TGJU_TICKER) {
-    try {
-      const cur = (await get(url, "json"))?.current;
-      if (cur && typeof cur === "object") return cur;
-    } catch { /* سرور بعدی */ }
+  try {
+    return await Promise.any(TGJU_TICKER.map(async (url) => {
+      const cur = (await get(url, "json", 5000))?.current;
+      if (!cur || typeof cur !== "object") throw new Error("bad ticker");
+      return cur;
+    }));
+  } catch {
+    return {};
   }
-  return {};
 }
 
 // تاریخچه‌ی روزانه به تومان: [[YYYY-MM-DD, تومان], ...] از قدیم به جدید
 async function tgjuHistory(slug) {
   try {
-    const rows = (await get(TGJU_HISTORY(slug), "json"))?.data || [];
+    const rows = (await get(TGJU_HISTORY(slug), "json", 5000))?.data || [];
     return rows
       .map((r) => [String(r[6]).split("/").map((x) => x.padStart(2, "0")).join("-"), num(r[3]) / 10])
       .filter(([d, v]) => d.length === 10 && v > 0)
@@ -306,7 +310,8 @@ async function translateTitles(sections) {
     cur.push(t.replace(/\n/g, " ")); len += t.length + 1;
   }
   if (cur.length) batches.push(cur);
-  await Promise.all(batches.slice(0, 5).map((b) => translateBatch(b).catch(() => {})));
+  // حداکثر ۳ دسته (هر کدوم ۱ یا در بدترین حالت ۲ درخواست) تا زیر سقف درخواست‌های Cloudflare بمونیم
+  await Promise.all(batches.slice(0, 3).map((b) => translateBatch(b).catch(() => {})));
   if (translated.size > 3000) translated.clear();
   for (const s of sections) {
     for (const it of s.items || []) {
@@ -336,9 +341,20 @@ export async function buildData(section, waitUntil) {
     cats.length ? fetchAllNews(cats, waitUntil) : {},
     needPrices ? buildPrices() : null,
   ]);
-  const sections = menu.map((m) => makeSection(m, news, priceData?.rates || []));
+  let sections = menu.map((m) => makeSection(m, news, priceData?.rates || []));
+  let prices = priceData?.prices;
+  // tgju به بعضی سرورهای خارج از ایران جواب نمی‌ده؛ اون موقع قیمت‌ها از آخرین data.json
+  // گیت‌هاب (که GitHub Actions با همون tgju می‌سازه) برداشته می‌شن.
+  if (needPrices && (!prices || prices.length < 3)) {
+    try {
+      const gh = await get(GITHUB_DATA, "json", 5000);
+      if (gh?.prices?.length) prices = gh.prices;
+      const ghGold = gh?.sections?.find((x) => x.key === "gold_currency");
+      if (ghGold?.rates?.length) sections = sections.map((x) => (x.key === "gold_currency" ? { ...x, rates: ghGold.rates } : x));
+    } catch { /* همون چیزی که داریم */ }
+  }
   await translateTitles(sections);
-  const out = { generated_at: new Date().toISOString(), source: "live", api_version: 5, sections };
-  if (priceData) out.prices = priceData.prices;
+  const out = { generated_at: new Date().toISOString(), source: "live", api_version: 7, sections };
+  if (prices) out.prices = prices;
   return out;
 }

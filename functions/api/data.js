@@ -1,5 +1,5 @@
-// GET /api/data            → همه‌ی داده‌ی اپ (خبرها + قیمت‌ها)، وقتی اپ باز می‌شه
-// GET /api/data?section=…  → فقط یک بخش (وقتی یک دکمه زده می‌شه)، سریع‌تر
+// GET /api/data?section=…  → یک بخش (خبرهای یک دکمه، یا gold_currency = قیمت‌ها). اپ موقع باز شدن
+//                            همه‌ی بخش‌ها رو جدا و هم‌زمان می‌خواد، و «همه اخبار» رو خودش می‌سازه.
 // همیشه تازه: جواب فقط FRESH_MS نگه داشته می‌شه (تا اگه چند نفر هم‌زمان باز کنن، سایت‌های خبری
 // اذیت نشن) و بعدش همون لحظه دوباره ساخته می‌شه. خودِ هر منبع خبری هم حداکثر یک دقیقه تو لبه‌ی
 // Cloudflare کش می‌شه (cloudflare/news.js)، پس خبر تازه حداکثر حدود یک دقیقه بعد تو اپه.
@@ -22,7 +22,10 @@ function respond(body, age, status = 200) {
 
 export async function onRequestGet({ request, waitUntil }) {
   const section = new URL(request.url).searchParams.get("section");
-  if (section && !SECTION_KEYS.includes(section)) return respond(JSON.stringify({ error: "unknown section" }), 0, 400);
+  // همه‌چیز با هم (بدون section) از سقف ۵۰ درخواست بیرونیِ نسخه‌ی رایگان Cloudflare رد می‌شه؛
+  // اپ هر بخش رو جدا می‌خواد و «همه اخبار» رو خودش می‌سازه.
+  if (!section) return respond(JSON.stringify({ error: "use ?section=", sections_available: SECTION_KEYS.filter((k) => k !== "all") }), 0, 400);
+  if (!SECTION_KEYS.includes(section) || section === "all") return respond(JSON.stringify({ error: "unknown section" }), 0, 400);
 
   const cache = caches.default;
   const key = section ? `${CACHE_BASE}?section=${encodeURIComponent(section)}` : CACHE_BASE;
